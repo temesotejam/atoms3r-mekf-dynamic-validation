@@ -16,19 +16,59 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Reconstruct audited V46 package
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - name: Reconstruct audited V46 package from text bundle
         shell: bash
         run: |
           set -euo pipefail
-          cat .import/part_* | tr -d '\n' | base64 -d > /tmp/v46.zip
-          rm -rf /tmp/v46
-          mkdir -p /tmp/v46
-          unzip -q /tmp/v46.zip -d /tmp/v46
-          srcdir="$(find /tmp/v46 -mindepth 1 -maxdepth 1 -type d | head -n 1)"
-          test -n "$srcdir"
+          rm -rf /tmp/v46_out
+          mkdir -p /tmp/v46_out
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          bundle_dir = Path('.import')
+          out = Path('/tmp/v46_out')
+          pieces = {}
+          for bundle in sorted(bundle_dir.glob('bundle_*.jsonl')):
+              for line_no, line in enumerate(bundle.read_text(encoding='utf-8').splitlines(), 1):
+                  if not line.strip():
+                      continue
+                  rec = json.loads(line)
+                  path = Path(rec['path'])
+                  if path.is_absolute() or '..' in path.parts:
+                      raise SystemExit(f'unsafe path in {bundle}:{line_no}: {path}')
+                  pieces.setdefault(path.as_posix(), {})[int(rec['index'])] = rec['content']
+
+          for rel, chunks in pieces.items():
+              expected = list(range(len(chunks)))
+              actual = sorted(chunks)
+              if actual != expected:
+                  raise SystemExit(f'missing chunk(s) for {rel}: {actual}')
+              target = out / rel
+              target.parent.mkdir(parents=True, exist_ok=True)
+              target.write_text(''.join(chunks[i] for i in expected), encoding='utf-8')
+          print(f'reconstructed {len(pieces)} files')
+          PY
+
+          (cd /tmp/v46_out && sha256sum -c "$GITHUB_WORKSPACE/.import/SHA256SUMS")
+          test -f /tmp/v46_out/src/experiment_runner.cpp
+          test -f /tmp/v46_out/src/mekf6.cpp
+          test -f /tmp/v46_out/tools/convert_rwlog_to_csv.py
+          test -f /tmp/v46_out/docs/MEKF_DYNAMIC_COMPARE_V46.md
 
           find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
-          cp -a "$srcdir"/. .
+          cp -a /tmp/v46_out/. .
+
+          cat > .gitignore <<'EOF'
+          .pio/
+          .vscode/
+          __pycache__/
+          *.pyc
+          *.log
+          EOF
 
           mkdir -p .github/workflows
           cat > .github/workflows/build.yml <<'YAML'
