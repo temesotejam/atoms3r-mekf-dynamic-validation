@@ -1,161 +1,109 @@
-# atoms3r-mekf-dynamic-validation
+# V46 MEKF + Dynamic-beta Madgwick synchronized validation build
 
-A directly flashable **6-axis MEKF attitude estimator with Adaptive Accelerometer Rejection** for the M5Stack AtomS3R family. The first validation target is **AtomS3R-M12**.
+This working firmware is derived from the V45 current-audit / Autonomous Energy Control V7 build.
+The **adopted control/detector attitude is now a 6-state MEKF**. During the Autonomous V7 capture, only the adopted **dynamic-beta Madgwick hold-073** filter is kept online as a comparison estimator. It never commands the motor.
 
-The firmware uses only the onboard accelerometer and gyroscope. On AtomS3R-M12 these are provided by the BMI270; the BMM150 magnetometer is intentionally not used.
+Key validation behavior:
 
-## Web flasher + serial monitor
+- MEKF drives zero-cross, peak detection, and Autonomous V7 angle-dependent decisions.
+- Dynamic-beta Madgwick is logged online for later comparison only.
+- Raw accelerometer/gyro, gyro-only integration, and accel-only atan2 remain logged for offline analysis.
+- The existing GPIO38 `LED_SYNC_PATTERN_V2_LOGGED_ANCHORS` START/MID/END video synchronization is unchanged.
+- RWLOG binary format is **v46**, append-only over the complete v45 sample prefix.
+- For video comparison use the continuous columns `pitch_mekf_abs_deg` and `pitch_madgwick_dynamic_abs_deg`; `pitch_mekf_control_deg` is the run-relative angle used by control.
+- MEKF acceleration trust diagnostics (`mekf_accel_confidence`, residual, magnitude error, `mekf_accel_used`) are logged on every sample.
 
-GitHub Pages hosts a browser tool for both flashing and viewing the MEKF log:
+See `docs/MEKF_DYNAMIC_COMPARE_V46.md` for the validation-specific log map and checks. Historical documentation below is retained because the control/current-audit logic is inherited.
 
-**https://temesotejam.github.io/atoms3r-mekf-dynamic-validation/**
+---
 
-Use desktop Chrome or Edge over HTTPS. The page provides:
+# Q1 direct next-peak shadow passive logger
 
-- ESP Web Tools firmware installation for ESP32-S3
-- the exact firmware rebuilt from the current `main` source
-- Web Serial connection at 115200 bps
-- live Roll / Pitch / Yaw / loop-rate display
-- live `acc_conf` and `acc_used` display so Adaptive Accel Rejection can be observed directly
-- raw serial log display
-- CSV/log download from the browser
+This derived firmware implements the current online-shadow candidate, **Q1**, and is strictly motor OFF. It records manual motion, detects zero-cross states, predicts the next video-coordinate absolute peak at Q=0, and records the inverse request that would be required on the canonical `q_target_mA_s` axis. It never applies that request.
 
-After flashing, let the board reboot normally, disconnect the installer if necessary, then press **シリアル接続** on the same page.
+The source project `2026_08_24_v62_passive_free_decay_logger` remains unchanged. E2/gyro half-range work remains an offline diagnostic result and is not in the Q1 validity or calculation path.
 
-> GitHub Pages must be enabled for this repository with **Settings -> Pages -> Source: GitHub Actions** once. The `pages` workflow handles all later firmware rebuilds and deployments automatically.
-
-## What it does
-
-- 6-state Multiplicative / Error-State EKF
-  - attitude error: 3 states
-  - gyroscope bias error: 3 states
-- Quaternion nominal attitude propagation
-- Gyroscope bias estimation, plus stationary startup bias initialization
-- Adaptive accelerometer rejection using both:
-  - deviation of acceleration magnitude from 1 g
-  - angular residual between measured acceleration direction and predicted gravity
-- Joseph-form covariance update
-- MEKF covariance reset after quaternion error injection
-- CSV telemetry over USB serial
-- PlatformIO build and upload configuration
-- GitHub Actions compile check
-
-## Important 6-axis limitation
-
-Roll and pitch have the gravity vector as an absolute reference. **Yaw does not.** Yaw is therefore relative to startup and will drift slowly over time. A magnetometer, GNSS heading, vision, or another external heading reference is required for absolute yaw.
-
-## Hardware direction
-
-The firmware is built on **M5Unified**, not on direct BMI270 register access. This keeps the estimator independent from the exact AtomS3R variant and lets M5Unified handle board-specific IMU initialization and axis correction.
-
-Initial target:
-
-- M5Stack AtomS3R-M12
-- ESP32-S3-PICO-1-N8R8
-- BMI270 accelerometer + gyro
-
-It is intentionally structured so other AtomS3R-family devices supported by M5Unified can be tested with the same estimator.
-
-## Default mounting: Y180
-
-The standard physical installation for this project is now **180 degrees about the AtomS3R +Y axis** relative to the vehicle/body frame. In other words, the board is installed in the upside-down orientation identified from the validation log.
-
-Before gyro calibration or MEKF processing, both accelerometer and gyroscope vectors are converted from the M5Unified/AtomS3R frame to the vehicle body frame using:
+## Fixed Q1 model
 
 ```text
-body X = -IMU X
-body Y =  IMU Y
-body Z = -IMU Z
+A_next_abs = 0.01304 + 0.08812 * abs(physical_roll_rate_dps)
+             + 0.11858 * physical_next_peak_side + g_side * q_target_mA_s
+
+g_plus  = 0.29032 deg/(mA s)
+g_minus = 0.25455 deg/(mA s)
 ```
 
-This is a proper 180-degree rotation about Y, so the right-handed coordinate system is preserved. With the AtomS3R mounted in this standard Y180 orientation and the vehicle itself level, the estimator should initialize near `Roll = 0 deg` and `Pitch = 0 deg` rather than near 180 degrees.
+The physical rate is official `+gy` after startup y-bias subtraction. The adopted-filter detector angle is anti-correlated with `+gy`, so the fixed acceptance rule is: detector `- -> +` requires `+gy < 0`; detector `+ -> -` requires `+gy > 0`. At an accepted zero-cross, the current-sample `+gy` sign determines `physical_next_peak_side`: positive rate means physical `+1` next peak, and negative rate means physical `-1` next peak. The detector coordinate, its measurement-start reference, 0.08 deg rearm, and 200 ms event interval are unchanged.
 
-The transform is defined in `src/app_config.hpp` as `imuToBodyY180()` so a future mounting convention can be changed in one place.
+The Q=0 baseline is calculated directly from Q1; E2 `H_next` and an IMU absolute-peak reconstruction are not used.
+
+## Safety boundary
+
+- `Q1_SHADOW_MOTOR_OFF_ONLY=true` is independent of the UI. `serviceFast()`, passive start, and the retained legacy `beginPulse()` all force motor command, current setting, pulse width, and pulse-active state to zero.
+- `Q_req_shadow` is metadata only. No Q1 function calls motor/current/pulse generation.
+- The target is locked while a run is active.
+- Negative or zero required augmentation is `INVALID_BRAKING_NOT_IDENTIFIED`; no negative Q is calculated.
+- Q is not clipped. The nonzero canonical support is `0.454 <= q_target_mA_s <= 1.197`. Outside it the event is `INVALID_Q_BELOW_SUPPORT` or `INVALID_Q_ABOVE_SUPPORT`.
+- The rate support recorded from the canonical dataset is `1.68--27.80 deg/s`; an accepted detector crossing outside it is retained with a rate-support INVALID reason rather than extrapolated.
+
+## Run procedure
+
+1. Wait for `READY`. ZERO and Current Roll target remain display-only.
+2. Before starting, set **Target next peak |A|**. It is an absolute peak target for Q1 shadow, separate from Current Roll. `0.0` intentionally produces braking INVALID records.
+3. Start the fixed-horizon video, then press **Start passive capture**. Settings lock for the run.
+4. After the LED start signature, move and release manually once. No strict hand-release velocity condition and no free-decay lock are required. Q1 accepts a crossing only after the detector angle leaves 0.08 deg.
+5. Download the RWLOG. Verify all time-series samples have `motor_cmd_mA=0`, `current_mA_setting=0`, `pulse_width_ms=0`, and `pulse_active=0`.
+
+## RWLOG and offline evaluation
+
+Metadata fixes `q1_model_name=direct_video_q1_20260829`, `q_model_axis_type=q_target`, and the five Q1 coefficients. Each `q1_shadow_events` item records:
+
+```text
+q1_shadow_event_index, zero_cross_time_ms,
+zero_cross_rate_dps, zero_cross_abs_rate_dps,
+physical_next_peak_side,
+detector_crossing_direction,
+detector_angle_before_deg, detector_angle_after_deg,
+crossing_interpolation_alpha, interpolated_zero_cross_time_ms,
+physical_roll_rate_before_dps, physical_roll_rate_after_dps,
+interpolated_physical_roll_rate_dps, sign_gate_passed,
+q1_intercept_deg, q1_rate_term_deg, q1_side_term_deg,
+q1_baseline_next_peak_abs_deg,
+target_next_peak_abs_deg, delta_peak_required_deg,
+q1_gain_deg_per_mAs, q_model_axis_mA_s, q_req_shadow_mA_s,
+q1_shadow_valid, q1_shadow_invalid_reason
+```
+
+`zero_cross_time_ms` and `zero_cross_rate_dps` remain the formal Q1 inputs. The interpolation columns are diagnostics only and are recorded in parallel for video comparison.
+
+Convert a log:
+
+```powershell
+python tools\convert_rwlog_to_csv.py passive_absolute_roll_run_*.rwlog --out converted_run
+```
+
+The converter writes `q1_shadow_events.csv`. Match each event to the next fixed-horizon video peak and first evaluate `A_next_video - q1_baseline_next_peak_abs_deg`. Since this build sends no Q, it must not be used to claim that `baseline + g*Q_req` was realized.
 
 ## Build
 
-Install PlatformIO, clone this repository, then:
-
-```bash
-pio run -e atoms3r
+```powershell
+C:\Users\arika\.platformio\penv\Scripts\platformio.exe run
+python tools\test_q1_shadow_logic.py
 ```
 
-## Upload
+This project documents build verification only; it does not instruct or perform a firmware upload.
+## Q_IDENT fixed-Q actual-output protocol
 
-Connect the AtomS3R device by USB and run:
+`q1_current_hw_fixed_q_ident_v3_qhigh0900_vbat8100_20260902` keeps the isolated actual-output mode, retains Qhigh=`0.900 mA*s`, and extends only the automatic Q_IDENT upper battery guard from `8.020` to `8.100 V`. It is not a Q1, E2, inverse-Q, target controller, calibration, start-kick, rebuild, or continuous-control mode.
 
-```bash
-pio run -e atoms3r -t upload
-```
+- Qhigh=`0.900 mA*s` is selected at the configured minimum battery `6.180 V` and `I0=0 mA`: its 23 ms integer pulse leaves 2 ms below the unchanged 25 ms guard. 300 mA, 5--25 ms, four fixed schedules, ARM, direction and support limits are unchanged.
+- Battery eligibility is checked automatically by firmware at `6.180--8.100 V`; no operator voltage confirmation is required. A value outside that inclusive range remains an invalid event with no pulse, replacement, clipping, or carryover.
+- Start only with **Start Q_IDENT Run 1**. The selected schedule is Run 1 and cannot be changed while recording.
+- The first two accepted, alternating physical-side zero-crosses with `|+gy| >= 30 deg/s` arm the mode; both are logged and cannot output a pulse.
+- After arming, output is eligible only at `1.68 <= |+gy| <= 27.80 deg/s` (both endpoints included). Each side follows its fixed schedule independently. `Q=0` is a valid, consumed baseline event with no pulse.
+- Every nonzero command uses the existing 300 mA current/pulse-width solver. `q_ident_events` now also preserve event Vbat, I0, continuous required width, selected integer width and the immutable guard, including a pulse-width-guard failure. Battery, roller, solver, state, and ESTOP failures record an invalid event and never substitute, clip, or carry a Q value.
+- The command-direction rule remains `-physical_next_peak_side`; Q1 remains motor-off-only and cannot command the Q_IDENT path.
+- Run 1 must pass all scheduled Q levels and LED-anchor video synchronization before the same firmware is frozen for Runs 2--4.
 
-If the device is not detected for flashing, put AtomS3R-M12 into download mode: hold RESET for about two seconds until the internal green LED lights, then release it, and retry the upload.
+The RWLOG remains binary format v43 because the sample layout is unchanged; it contains expanded JSON metadata `q_ident_events`. Use `tools/convert_rwlog_to_csv.py` to create `q_ident_events.csv`.
 
-## Serial monitor
-
-```bash
-pio device monitor -b 115200
-```
-
-On boot, keep the vehicle/body still for roughly 1.5 seconds while gyro bias is initialized. The firmware then initializes roll/pitch from averaged accelerometer data and starts CSV output.
-
-CSV fields:
-
-```text
-t_us,rate_hz,roll_deg,pitch_deg,yaw_deg,gx_dps,gy_dps,gz_dps,bgx_dps,bgy_dps,bgz_dps,acc_norm_g,acc_mag_err_g,acc_resid_deg,acc_conf,acc_used
-```
-
-The gyro fields and estimated gyro-bias fields are expressed in the **vehicle body frame after the Y180 mounting transform**.
-
-Useful adaptive-rejection fields are:
-
-- `acc_norm_g`: measured acceleration magnitude
-- `acc_mag_err_g`: `abs(|a|-1g)`
-- `acc_resid_deg`: angle between measured acceleration direction and predicted gravity direction
-- `acc_conf`: 0..1 confidence used to scale the accelerometer measurement noise
-- `acc_used`: 1 when an accelerometer EKF update was applied, 0 when rejected
-
-## Default adaptive rejection
-
-The initial defaults are conservative starting points, not universal tuning constants:
-
-- full magnitude confidence: `| |a| - 1g | <= 0.08 g`
-- magnitude rejection: `>= 0.30 g`
-- full direction confidence: `<= 6 deg`
-- direction rejection: `>= 22 deg`
-- below confidence `0.05`, accelerometer update is skipped
-
-Between full confidence and rejection, confidence changes smoothly. The effective accelerometer covariance increases approximately as `1 / confidence^2`.
-
-All tuning values are in `src/app_config.hpp` and `src/mekf6.hpp`.
-
-## Coordinate convention
-
-M5Unified first supplies board-corrected AtomS3R IMU axes. The application then applies the standard Y180 mounting transform above to obtain the vehicle/body frame. The estimator uses that right-handed body coordinate system and a quaternion mapping body -> world. Euler output is ZYX yaw/pitch/roll derived from that quaternion.
-
-At startup yaw is defined as 0 degrees because no heading sensor is used.
-
-## Source layout
-
-```text
-src/
-  main.cpp          AtomS3R executable firmware
-  app_config.hpp    application/tuning + mounting transform
-  mekf6.hpp         estimator interface and data types
-  mekf6.cpp         MEKF implementation
-site/
-  index.html        browser flasher + serial monitor
-  app.js            Web Serial CSV parser / live status
-  styles.css        browser UI
-  manifest.json     ESP Web Tools flash manifest
-docs/
-  algorithm.md      state/error conventions and equations
-.github/workflows/
-  build.yml         PlatformIO compile check
-  pages.yml         build firmware and deploy GitHub Pages
-```
-
-## Why adaptive accel rejection matters
-
-A 6-axis attitude filter normally treats acceleration direction as gravity. During translational acceleration that assumption is false. This implementation therefore lets the gyro continue to track fast rotational motion while reducing or completely rejecting accelerometer correction when the measured acceleration is inconsistent with gravity.
-
-That distinction is the main reason this estimator is aimed at dynamic motion rather than only quasi-static tilt estimation.

@@ -16,23 +16,14 @@ void Mekf6::reset() {
 
 void Mekf6::setConfig(const Config& cfg) { cfg_ = cfg; }
 
-float Mekf6::clampf(float v, float lo, float hi) {
-  return std::max(lo, std::min(v, hi));
-}
-
-float Mekf6::norm(const Vec3& v) {
-  return std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
-}
-
+float Mekf6::clampf(float v, float lo, float hi) { return std::max(lo, std::min(v, hi)); }
+float Mekf6::norm(const Vec3& v) { return std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z); }
 Vec3 Mekf6::normalized(const Vec3& v) {
   const float n = norm(v);
   if (n < 1.0e-8f) return Vec3{};
   return {v.x / n, v.y / n, v.z / n};
 }
-
-float Mekf6::dot(const Vec3& a, const Vec3& b) {
-  return a.x * b.x + a.y * b.y + a.z * b.z;
-}
+float Mekf6::dot(const Vec3& a, const Vec3& b) { return a.x * b.x + a.y * b.y + a.z * b.z; }
 
 Quaternion Mekf6::quatMultiply(const Quaternion& a, const Quaternion& b) {
   return {
@@ -50,13 +41,9 @@ Quaternion Mekf6::quatNormalized(const Quaternion& q) {
 }
 
 Quaternion Mekf6::quatFromEuler(float roll, float pitch, float yaw) {
-  const float cr = std::cos(0.5f * roll);
-  const float sr = std::sin(0.5f * roll);
-  const float cp = std::cos(0.5f * pitch);
-  const float sp = std::sin(0.5f * pitch);
-  const float cy = std::cos(0.5f * yaw);
-  const float sy = std::sin(0.5f * yaw);
-
+  const float cr = std::cos(0.5f * roll), sr = std::sin(0.5f * roll);
+  const float cp = std::cos(0.5f * pitch), sp = std::sin(0.5f * pitch);
+  const float cy = std::cos(0.5f * yaw), sy = std::sin(0.5f * yaw);
   return quatNormalized({
       cr * cp * cy + sr * sp * sy,
       sr * cp * cy - cr * sp * sy,
@@ -95,7 +82,6 @@ bool Mekf6::inverse3x3(const float A[3][3], float invA[3][3]) {
   const float c02 = A[1][0] * A[2][1] - A[1][1] * A[2][0];
   const float det = A[0][0] * c00 + A[0][1] * c01 + A[0][2] * c02;
   if (std::fabs(det) < 1.0e-12f) return false;
-
   const float inv_det = 1.0f / det;
   invA[0][0] = c00 * inv_det;
   invA[0][1] = (A[0][2] * A[2][1] - A[0][1] * A[2][2]) * inv_det;
@@ -126,7 +112,7 @@ void Mekf6::initializeCovariance() {
 
 bool Mekf6::initializeFromAccel(const Vec3& accel_g) {
   const float a_norm = norm(accel_g);
-  if (a_norm < 0.2f) return false;
+  if (!std::isfinite(a_norm) || a_norm < 0.2f) return false;
   const Vec3 a = normalized(accel_g);
   const float roll = std::atan2(a.y, a.z);
   const float pitch = std::atan2(-a.x, std::sqrt(a.y * a.y + a.z * a.z));
@@ -139,15 +125,8 @@ void Mekf6::setGyroBiasRadS(const Vec3& bias_rad_s) { bias_ = bias_rad_s; }
 
 bool Mekf6::predict(const Vec3& gyro_rad_s, float dt_s) {
   if (!std::isfinite(dt_s) || dt_s < cfg_.min_dt_s || dt_s > cfg_.max_dt_s) return false;
-
-  const Vec3 omega{
-      gyro_rad_s.x - bias_.x,
-      gyro_rad_s.y - bias_.y,
-      gyro_rad_s.z - bias_.z,
-  };
-
-  const Vec3 rotation{omega.x * dt_s, omega.y * dt_s, omega.z * dt_s};
-  q_ = quatNormalized(quatMultiply(q_, deltaQuat(rotation)));
+  const Vec3 omega{gyro_rad_s.x - bias_.x, gyro_rad_s.y - bias_.y, gyro_rad_s.z - bias_.z};
+  q_ = quatNormalized(quatMultiply(q_, deltaQuat({omega.x * dt_s, omega.y * dt_s, omega.z * dt_s})));
 
   float W[3][3];
   skew(omega, W);
@@ -158,21 +137,20 @@ bool Mekf6::predict(const Vec3& gyro_rad_s, float dt_s) {
     Phi[r][r + 3] = -dt_s;
   }
 
-  float temp[6][6]{};
-  float Pnew[6][6]{};
+  float temp[6][6]{}, Pnew[6][6]{};
   for (int r = 0; r < 6; ++r)
     for (int c = 0; c < 6; ++c)
       for (int k = 0; k < 6; ++k) temp[r][c] += Phi[r][k] * P_[k][c];
-
   for (int r = 0; r < 6; ++r)
     for (int c = 0; c < 6; ++c)
       for (int k = 0; k < 6; ++k) Pnew[r][c] += temp[r][k] * Phi[c][k];
 
+  // Discrete process noise. The attitude term follows integrated gyro white noise;
+  // the bias term follows the configured random-walk density.
   const float q_theta = cfg_.gyro_noise_std_rad_s * cfg_.gyro_noise_std_rad_s * dt_s * dt_s;
   const float q_bias = cfg_.gyro_bias_rw_std_rad_s_sqrt_s * cfg_.gyro_bias_rw_std_rad_s_sqrt_s * dt_s;
   for (int i = 0; i < 3; ++i) Pnew[i][i] += q_theta;
   for (int i = 3; i < 6; ++i) Pnew[i][i] += q_bias;
-
   std::memcpy(P_, Pnew, sizeof(P_));
   symmetrizeCovariance();
   return true;
@@ -189,7 +167,6 @@ bool Mekf6::updateAccel(const Vec3& accel_g) {
   const float mag_err = std::fabs(a_norm - 1.0f);
   const float cos_angle = clampf(dot(z, h), -1.0f, 1.0f);
   const float angle_deg = radToDeg(std::acos(cos_angle));
-
   const float c_mag = smoothConfidence(mag_err, cfg_.accel_mag_full_g, cfg_.accel_mag_reject_g);
   const float c_dir = smoothConfidence(angle_deg, cfg_.accel_angle_full_deg, cfg_.accel_angle_reject_deg);
   const float confidence = std::min(c_mag, c_dir);
@@ -204,8 +181,8 @@ bool Mekf6::updateAccel(const Vec3& accel_g) {
   skew(h, Htheta);
   for (int r = 0; r < 3; ++r)
     for (int c = 0; c < 3; ++c) H[r][c] = Htheta[r][c];
-
   const float y[3] = {z.x - h.x, z.y - h.y, z.z - h.z};
+
   float PHt[6][3]{};
   for (int r = 0; r < 6; ++r)
     for (int c = 0; c < 3; ++c)
@@ -214,7 +191,6 @@ bool Mekf6::updateAccel(const Vec3& accel_g) {
   const float base_r = cfg_.accel_direction_noise_std * cfg_.accel_direction_noise_std;
   const float safe_conf = std::max(confidence, cfg_.accel_min_confidence);
   const float r_eff = base_r / (safe_conf * safe_conf);
-
   float S[3][3]{};
   for (int r = 0; r < 3; ++r) {
     for (int c = 0; c < 3; ++c) {
@@ -225,7 +201,6 @@ bool Mekf6::updateAccel(const Vec3& accel_g) {
 
   float Sinv[3][3];
   if (!inverse3x3(S, Sinv)) return false;
-
   float K[6][3]{};
   for (int r = 0; r < 6; ++r)
     for (int c = 0; c < 3; ++c)
@@ -235,25 +210,22 @@ bool Mekf6::updateAccel(const Vec3& accel_g) {
   for (int r = 0; r < 6; ++r)
     for (int k = 0; k < 3; ++k) dx[r] += K[r][k] * y[k];
 
+  // Joseph-form covariance update.
   float A[6][6]{};
   for (int i = 0; i < 6; ++i) A[i][i] = 1.0f;
   for (int r = 0; r < 6; ++r)
     for (int c = 0; c < 6; ++c)
       for (int k = 0; k < 3; ++k) A[r][c] -= K[r][k] * H[k][c];
-
-  float AP[6][6]{};
-  float Pj[6][6]{};
+  float AP[6][6]{}, Pj[6][6]{};
   for (int r = 0; r < 6; ++r)
     for (int c = 0; c < 6; ++c)
       for (int k = 0; k < 6; ++k) AP[r][c] += A[r][k] * P_[k][c];
-
   for (int r = 0; r < 6; ++r) {
     for (int c = 0; c < 6; ++c) {
       for (int k = 0; k < 6; ++k) Pj[r][c] += AP[r][k] * A[c][k];
       for (int k = 0; k < 3; ++k) Pj[r][c] += r_eff * K[r][k] * K[c][k];
     }
   }
-
   std::memcpy(P_, Pj, sizeof(P_));
   injectErrorState(dx);
   diag_.accel_used = true;
@@ -264,30 +236,23 @@ bool Mekf6::updateAccel(const Vec3& accel_g) {
 void Mekf6::injectErrorState(const float dx[6]) {
   const Vec3 dtheta{dx[0], dx[1], dx[2]};
   q_ = quatNormalized(quatMultiply(q_, deltaQuat(dtheta)));
-  bias_.x += dx[3];
-  bias_.y += dx[4];
-  bias_.z += dx[5];
+  bias_.x += dx[3]; bias_.y += dx[4]; bias_.z += dx[5];
   applyResetJacobian(dtheta);
 }
 
 void Mekf6::applyResetJacobian(const Vec3& dtheta) {
-  float S[3][3];
-  skew(dtheta, S);
+  float S[3][3]; skew(dtheta, S);
   float G[6][6]{};
   for (int i = 0; i < 6; ++i) G[i][i] = 1.0f;
   for (int r = 0; r < 3; ++r)
     for (int c = 0; c < 3; ++c) G[r][c] -= 0.5f * S[r][c];
-
-  float GP[6][6]{};
-  float out[6][6]{};
+  float GP[6][6]{}, out[6][6]{};
   for (int r = 0; r < 6; ++r)
     for (int c = 0; c < 6; ++c)
       for (int k = 0; k < 6; ++k) GP[r][c] += G[r][k] * P_[k][c];
-
   for (int r = 0; r < 6; ++r)
     for (int c = 0; c < 6; ++c)
       for (int k = 0; k < 6; ++k) out[r][c] += GP[r][k] * G[c][k];
-
   std::memcpy(P_, out, sizeof(P_));
 }
 
@@ -296,8 +261,7 @@ void Mekf6::symmetrizeCovariance() {
     P_[r][r] = std::max(P_[r][r], 1.0e-12f);
     for (int c = r + 1; c < 6; ++c) {
       const float s = 0.5f * (P_[r][c] + P_[c][r]);
-      P_[r][c] = s;
-      P_[c][r] = s;
+      P_[r][c] = s; P_[c][r] = s;
     }
   }
 }
