@@ -19,7 +19,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.x"
-      - name: Reconstruct audited V46 repository payload
+
+      - name: Verify audited V46 payload
         shell: bash
         run: |
           set -euo pipefail
@@ -30,24 +31,39 @@ jobs:
           parts = sorted(Path('.import').glob('minhex_*'))
           if not parts:
               raise SystemExit('no minhex parts found')
+          for p in parts:
+              print(f'{p.name}: {p.stat().st_size} bytes')
           hex_text = ''.join(p.read_text(encoding='ascii').strip() for p in parts)
           data = bytes.fromhex(hex_text)
           expected = 'a1206de153b9ebc42e7ac57560f605332fd39ddf15da248d4584bea50d289483'
           actual = hashlib.sha256(data).hexdigest()
           print('PAYLOAD SHA256:', actual)
+          print('PAYLOAD BYTES:', len(data))
           if actual != expected:
               raise SystemExit(f'payload SHA mismatch: {actual} != {expected}')
           Path('/tmp/v46_payload.tar.xz').write_bytes(data)
           PY
 
+      - name: Extract and validate V46 tree
+        shell: bash
+        run: |
+          set -euo pipefail
           rm -rf /tmp/v46
           mkdir -p /tmp/v46
           tar -xJf /tmp/v46_payload.tar.xz -C /tmp/v46
           test -f /tmp/v46/src/experiment_runner.cpp
           test -f /tmp/v46/src/mekf6.cpp
           test -f /tmp/v46/tools/convert_rwlog_to_csv.py
+          test -f /tmp/v46/tools/test_mekf_host.cpp
+          test -f /tmp/v46/tools/test_rwlog_v46_converter.py
           test -f /tmp/v46/docs/MEKF_DYNAMIC_COMPARE_V46.md
+          test -f /tmp/v46/FINAL_PROGRAM_AUDIT_V46.md
+          echo "V46 tree validated"
 
+      - name: Import audited V46 tree
+        shell: bash
+        run: |
+          set -euo pipefail
           find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
           cp -a /tmp/v46/. .
 
@@ -61,7 +77,7 @@ jobs:
 
           mkdir -p .github/workflows
           cat > .github/workflows/build.yml <<'YAML'
-          name: build-and-regression
+          name: V46 firmware validation
 
           on:
             push:
@@ -69,7 +85,7 @@ jobs:
             pull_request:
 
           jobs:
-            firmware-and-tests:
+            firmware:
               runs-on: ubuntu-latest
               steps:
                 - uses: actions/checkout@v4
@@ -80,7 +96,15 @@ jobs:
                   run: pip install --upgrade platformio
                 - name: Build AtomS3 firmware
                   run: pio run -e atoms3cam
-                - name: MEKF native host test
+
+            regression:
+              runs-on: ubuntu-latest
+              steps:
+                - uses: actions/checkout@v4
+                - uses: actions/setup-python@v5
+                  with:
+                    python-version: "3.x"
+                - name: MEKF host dynamics/sign test
                   run: |
                     g++ -std=c++17 -O2 -Isrc tools/test_mekf_host.cpp src/mekf6.cpp -o /tmp/test_mekf
                     /tmp/test_mekf
