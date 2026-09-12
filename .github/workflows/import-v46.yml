@@ -19,7 +19,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.x"
-      - name: Reconstruct audited V46 ZIP
+      - name: Reconstruct audited V46 repository payload
         shell: bash
         run: |
           set -euo pipefail
@@ -27,31 +27,29 @@ jobs:
           import hashlib
           from pathlib import Path
 
-          parts = sorted(Path('.import').glob('hex_*'))
+          parts = sorted(Path('.import').glob('minhex_*'))
           if not parts:
-              raise SystemExit('no hex parts found')
+              raise SystemExit('no minhex parts found')
           hex_text = ''.join(p.read_text(encoding='ascii').strip() for p in parts)
           data = bytes.fromhex(hex_text)
-          expected = 'f16b1c107f784991cea6be605ff32c83f1a3ff240fcef7b877a52ee593963aed'
+          expected = 'a1206de153b9ebc42e7ac57560f605332fd39ddf15da248d4584bea50d289483'
           actual = hashlib.sha256(data).hexdigest()
-          print('ZIP SHA256:', actual)
+          print('PAYLOAD SHA256:', actual)
           if actual != expected:
-              raise SystemExit(f'ZIP SHA mismatch: {actual} != {expected}')
-          Path('/tmp/v46.zip').write_bytes(data)
+              raise SystemExit(f'payload SHA mismatch: {actual} != {expected}')
+          Path('/tmp/v46_payload.tar.xz').write_bytes(data)
           PY
 
           rm -rf /tmp/v46
           mkdir -p /tmp/v46
-          unzip -q /tmp/v46.zip -d /tmp/v46
-          srcdir="$(find /tmp/v46 -mindepth 1 -maxdepth 1 -type d | head -n 1)"
-          test -n "$srcdir"
-          test -f "$srcdir/src/experiment_runner.cpp"
-          test -f "$srcdir/src/mekf6.cpp"
-          test -f "$srcdir/tools/convert_rwlog_to_csv.py"
-          test -f "$srcdir/docs/MEKF_DYNAMIC_COMPARE_V46.md"
+          tar -xJf /tmp/v46_payload.tar.xz -C /tmp/v46
+          test -f /tmp/v46/src/experiment_runner.cpp
+          test -f /tmp/v46/src/mekf6.cpp
+          test -f /tmp/v46/tools/convert_rwlog_to_csv.py
+          test -f /tmp/v46/docs/MEKF_DYNAMIC_COMPARE_V46.md
 
           find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
-          cp -a "$srcdir"/. .
+          cp -a /tmp/v46/. .
 
           cat > .gitignore <<'EOF'
           .pio/
