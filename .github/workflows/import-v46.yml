@@ -1,0 +1,79 @@
+name: import-v46
+
+on:
+  push:
+    branches: ["feature/v46-mekf-dynamic-validation"]
+    paths:
+      - ".import/READY"
+
+permissions:
+  contents: write
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Reconstruct audited V46 package
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .import/part_* | tr -d '\n' | base64 -d > /tmp/v46.zip
+          rm -rf /tmp/v46
+          mkdir -p /tmp/v46
+          unzip -q /tmp/v46.zip -d /tmp/v46
+          srcdir="$(find /tmp/v46 -mindepth 1 -maxdepth 1 -type d | head -n 1)"
+          test -n "$srcdir"
+
+          find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          cp -a "$srcdir"/. .
+
+          mkdir -p .github/workflows
+          cat > .github/workflows/build.yml <<'YAML'
+          name: build-and-regression
+
+          on:
+            push:
+              branches: [main, "feature/**"]
+            pull_request:
+
+          jobs:
+            firmware-and-tests:
+              runs-on: ubuntu-latest
+              steps:
+                - uses: actions/checkout@v4
+                - uses: actions/setup-python@v5
+                  with:
+                    python-version: "3.x"
+                - name: Install PlatformIO
+                  run: pip install --upgrade platformio
+                - name: Build AtomS3 firmware
+                  run: pio run -e atoms3cam
+                - name: MEKF native host test
+                  run: |
+                    g++ -std=c++17 -O2 -Isrc tools/test_mekf_host.cpp src/mekf6.cpp -o /tmp/test_mekf
+                    /tmp/test_mekf
+                - name: RWLOG converter regressions
+                  run: |
+                    python tools/test_rwlog_v42_converter.py
+                    python tools/test_rwlog_v45_converter.py
+                    python tools/test_rwlog_v46_converter.py
+                - name: Control and safety regressions
+                  run: |
+                    python tools/test_current_audit_source_guards.py
+                    python tools/test_energy_control_autonomous_v1.py
+                    python tools/test_energy_control_autonomous_v5_metadata.py
+                    python tools/test_energy_control_v0.py
+                    python tools/test_energy_control_v01_protocol.py
+                    python tools/test_q1_shadow_logic.py
+                    python tools/test_q_ident_protocol.py
+                    python tools/test_e2_shadow_logic.py
+          YAML
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Import audited V46 MEKF dynamic validation firmware"
+          git push origin HEAD:${GITHUB_REF_NAME}
