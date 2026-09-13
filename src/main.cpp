@@ -30,7 +30,7 @@ void setup() {
   Serial.begin(Config::SERIAL_BAUD);
   delay(300);
   Serial.println();
-  Serial.println("AtomS3R V46 MEKF dynamic validation");
+  Serial.println("AtomS3R V46 MEKF motor-driven dynamic validation");
 
   auto cfg = M5.config();
   cfg.serial_baudrate = 0;
@@ -41,7 +41,7 @@ void setup() {
                 Config::RESOLVED_M5UNIFIED_VERSION, Config::RESOLVED_M5GFX_VERSION,
                 Config::RESOLVED_ADAFRUIT_AHRS_VERSION, Config::V62_BASE_COMMIT,
                 Config::ATTITUDE_VALIDATION_REVISION);
-  displayLine("V46 MEKF", "PASSIVE FIRST");
+  displayLine("V46 MEKF", "V7 MOTOR VALIDATION");
 
   const bool psram_ok = logger.begin();
   Serial.printf("PSRAM: %s total=%u free=%u sample_capacity=%u\n", psram_ok ? "OK" : "FAILED",
@@ -60,8 +60,8 @@ void setup() {
   web.begin(server, runner, imu, roller, logger);
 
   Serial.printf("AP SSID: %s\n", Config::AP_SSID);
-  Serial.println("Open http://192.168.4.1/");
-  displayLine("AP ready", Config::AP_SSID);
+  Serial.println("Open http://192.168.4.1/ and start Autonomous Energy Control V7");
+  displayLine("V7 motor ready", Config::AP_SSID);
 }
 
 void loop() {
