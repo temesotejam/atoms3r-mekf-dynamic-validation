@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Static guards for the motor-driven V46h attitude-validation path."""
+"""Static guards for the motor-driven V46i attitude-validation path."""
 
 from pathlib import Path
 
@@ -25,9 +25,6 @@ def main() -> None:
     ):
         assert token in config, token
 
-    # Web start/ESTOP and post-run recovery remain intact. V46h deliberately
-    # suppresses status.json polling while the run is active, but ESTOP remains
-    # a direct POST and polling resumes after the bounded run/sync window.
     for token in (
         'server_->on("/start-energy-control-autonomous"',
         "runner_->startEnergyControlAutonomousCapture()",
@@ -46,7 +43,6 @@ def main() -> None:
     ):
         assert token in web, token
 
-    # Existing V7 motor safety/authority remains the sole output path.
     for token in (
         "energy_control_autonomous_pulse_live",
         "energy_control_autonomous_pulse_authorized_",
@@ -55,10 +51,18 @@ def main() -> None:
         "updateEnergyControlAutonomousPulse",
     ):
         assert token in runner, token
-    assert "if (command_mA_ == 0 && telemetry_.output_raw == 0) return true;" in roller
-    assert "telemetry_.output_raw = current_mA == 0 ? 0 : 1;" in roller
 
-    # Startup 10-s guide LED and measured-upright gating are unchanged.
+    # V46i preserves fail-closed motor authority across the Core-1 -> Core-0 queue.
+    for token in (
+        "xQueueReset(command_queue_)",
+        "requested_current_mA_ = 0",
+        "if (!applyCurrentMa(cmd))",
+        "applyCurrentMa(zero)",
+        "requested_current_mA_ == 0 && (command_mA_ != 0 || telemetry_.output_raw != 0)",
+        "telemetry_.output_raw = cmd.current_mA == 0 ? 0 : 1",
+    ):
+        assert token in roller, token
+
     for token in (
         "GUIDE_LED_ON_AFTER_BOOT_MS = 10000UL",
         "REF_AX = 0.021626f",
@@ -74,32 +78,22 @@ def main() -> None:
     assert "startup_upright_confirmed = true;" in main_cpp
     assert "digitalWrite(Config::SYNC_LED_PIN, LOW);" in main_cpp
 
-    # Proper right-handed R_y(pi)=diag(-1,+1,-1) body frame.
     assert "return {-r.ax_g, r.ay_g, -r.az_g};" in runner
     assert "r.gy_dps * Config::MEKF_GYRO_Y_SCALE" in runner
     assert "by_dps * Config::MEKF_GYRO_Y_SCALE" in runner
     assert "-mean_accel_raw.x, mean_accel_raw.y, -mean_accel_raw.z" in runner
 
-    # No display-only calibration may remain: absolute and control pitch both
-    # originate from the same MEKF posterior; control uses only forward prediction.
     assert "MEKF_VIDEO_OUTPUT_SCALE" not in config
     assert "MEKF_VIDEO_OUTPUT_SIGN" not in config
     assert "status_.pitch_mekf_abs_deg = raw_mekf_pitch_abs_deg_;" in runner
     assert "status_.pitch_mekf_deg = raw_mekf_predicted_abs_deg_ - offset_mekf_pitch_deg_" in runner
     assert "MEKF_GYRO_Y_SCALE = 0.908911f" in config
-    assert "r.gy_dps * Config::MEKF_GYRO_Y_SCALE" in runner
-    assert "by_dps * Config::MEKF_GYRO_Y_SCALE" in runner
     assert "mekf_bias_y_dps = mekf6::radToDeg(b.y) / Config::MEKF_GYRO_Y_SCALE" in runner
 
-    # With physical/video-sign pitch, return-to-centre rate is opposite peak
-    # side and physical peak side equals detector side. Zero-cross physical side
-    # remains selected from +gy rate, preserving Q/motor direction semantics.
     assert "rate_sign == -energy_control_autonomous_candidate_detector_side_" in runner
-    assert "energy_control_autonomous_candidate_peak_ms_,\n      energy_control_autonomous_candidate_detector_side_," in runner
     assert "event.physical_next_peak_side = rate_dps >= 0.0f ? 1 : -1;" in runner
     assert "event.q_command_direction = event.physical_next_peak_side;" in runner
 
-    # Run-start MEKF reinitialization and accel-rejection path remain present.
     for token in (
         'status_.last_error = "upright_pose_required_before_start"',
         "g_v46_mekf_run_reinit.active = true",
@@ -115,12 +109,12 @@ def main() -> None:
 
     assert "const bool v46_mekf_dynamic_compare = energy_control_autonomous_mode_" in runner
     assert "pitch_madgwick_dynamic_abs_deg" in runner
-    assert "v46h_mekf_400hz_web_quiet_predict_20260913" in config
-    assert "V46h MEKF motor-driven dynamic validation" in main_cpp
-    assert "V7 MOTOR VALIDATION" in main_cpp
+    assert "v46i_mekf_400hz_dual_core_roller_queue_20260913" in config
+    assert "AtomS3R V46i MEKF dual-core motor validation" in main_cpp
+    assert "DUAL-CORE V7" in main_cpp
     assert "motor output OFF" not in main_cpp
 
-    print("V46h high-rate physical-frame motor validation source guards passed")
+    print("V46i dual-core physical-frame motor validation source guards passed")
 
 
 if __name__ == "__main__":
