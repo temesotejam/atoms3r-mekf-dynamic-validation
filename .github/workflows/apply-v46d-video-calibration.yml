@@ -37,12 +37,14 @@ jobs:
               'static constexpr float MEKF_VIDEO_OUTPUT_SIGN = -1.0f;\n'
               'static constexpr float MEKF_VIDEO_OUTPUT_SCALE = 0.908911f;\n'
           )
-          replace_one(
-              'src/experiment_runner.cpp',
-              '  status_.pitch_mekf_abs_deg = raw_mekf_pitch_abs_deg_;\n',
-              '  status_.pitch_mekf_abs_deg = Config::MEKF_VIDEO_OUTPUT_SIGN *\n'
-              '      Config::MEKF_VIDEO_OUTPUT_SCALE * raw_mekf_pitch_abs_deg_;\n'
-          )
+          p = Path('src/experiment_runner.cpp')
+          s = p.read_text(encoding='utf-8')
+          old = '  status_.pitch_mekf_abs_deg = raw_mekf_pitch_abs_deg_;\n'
+          new = ('  status_.pitch_mekf_abs_deg = Config::MEKF_VIDEO_OUTPUT_SIGN *\n'
+                 '      Config::MEKF_VIDEO_OUTPUT_SCALE * raw_mekf_pitch_abs_deg_;\n')
+          assert s.count(old) == 2, s.count(old)
+          p.write_text(s.replace(old, new), encoding='utf-8')
+
           replace_one(
               'src/experiment_runner.h',
               '  float pitch_mekf_abs_deg = 0.0f;          // continuous gravity-frame MEKF pitch coordinate\n',
@@ -65,7 +67,7 @@ jobs:
           addition = (
               '    assert "MEKF_VIDEO_OUTPUT_SCALE = 0.908911f" in config\n'
               '    assert "MEKF_VIDEO_OUTPUT_SIGN = -1.0f" in config\n'
-              '    assert "Config::MEKF_VIDEO_OUTPUT_SCALE * raw_mekf_pitch_abs_deg_" in runner\n'
+              '    assert runner.count("Config::MEKF_VIDEO_OUTPUT_SCALE * raw_mekf_pitch_abs_deg_") == 2\n'
               '    assert "status_.pitch_mekf_deg = raw_mekf_pitch_abs_deg_ - offset_mekf_pitch_deg_" in runner\n'
           )
           s = s.replace(anchor, anchor + addition, 1)
@@ -117,7 +119,7 @@ jobs:
           grep -q 'MEKF_VIDEO_OUTPUT_SCALE = 0.908911f' src/config.h
           grep -q 'MEKF_VIDEO_OUTPUT_SIGN = -1.0f' src/config.h
           grep -q 'v46d_mekf_video_calibrated_rx180_upright_reinit_20260913' src/config.h
-          grep -q 'Config::MEKF_VIDEO_OUTPUT_SCALE \* raw_mekf_pitch_abs_deg_' src/experiment_runner.cpp
+          test "$(grep -c 'Config::MEKF_VIDEO_OUTPUT_SCALE \* raw_mekf_pitch_abs_deg_' src/experiment_runner.cpp)" -eq 2
       - name: Commit V46d calibration
         run: |
           git config user.name github-actions[bot]
