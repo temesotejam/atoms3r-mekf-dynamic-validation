@@ -1,0 +1,102 @@
+name: apply-v46c-body-frame
+
+on:
+  push:
+    paths:
+      - .github/workflows/apply-v46c-body-frame.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Patch MEKF frame adapter and revision
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          p = Path('src/experiment_runner.cpp')
+          text = p.read_text(encoding='utf-8')
+
+          old = '''// Match the historical V45 detector coordinate without mixing spatial axes.
+// Accelerometer vectors remain in the raw M5Unified IMU frame so the static
+// pitch remains atan2(-ax,hypot(ay,az)). The MEKF quaternion kinematics use the
+// opposite angular-velocity sign convention to the legacy detector, therefore
+// all three gyro components (and their startup bias) are negated before predict.
+// This keeps a right-handed 3-D frame while making d(pitch)/dt agree with the
+// existing V45 detector convention pitch_rate = -gy.
+mekf6::Vec3 mekfAccelFromRaw(const ImuReading& r) {
+  return {r.ax_g, r.ay_g, r.az_g};
+}
+
+mekf6::Vec3 mekfGyroRadFromRaw(const ImuReading& r) {
+  return {mekf6::degToRad(-r.gx_dps), mekf6::degToRad(-r.gy_dps), mekf6::degToRad(-r.gz_dps)};
+}
+
+mekf6::Vec3 mekfStartupBiasFromRaw(float bx_dps, float by_dps, float bz_dps) {
+  return {mekf6::degToRad(-bx_dps), mekf6::degToRad(-by_dps), mekf6::degToRad(-bz_dps)};
+}
+'''
+          new = '''// AtomS3R is mounted with its raw +Z axis pointing downward in the measured
+// upright pose. Map the raw IMU into the legacy/body frame with a proper 180-deg
+// rotation about +X: R_x(pi)=diag(+1,-1,-1). This keeps the frame right-handed,
+// maps upright gravity from raw -Z to filter +Z, preserves the historical static
+// pitch atan2(-ax,hypot(ay,az)), and gives the required dynamic convention
+// d(pitch)/dt = -raw_gy near upright.
+mekf6::Vec3 mekfAccelFromRaw(const ImuReading& r) {
+  return {r.ax_g, -r.ay_g, -r.az_g};
+}
+
+mekf6::Vec3 mekfGyroRadFromRaw(const ImuReading& r) {
+  return {mekf6::degToRad(r.gx_dps), mekf6::degToRad(-r.gy_dps), mekf6::degToRad(-r.gz_dps)};
+}
+
+mekf6::Vec3 mekfStartupBiasFromRaw(float bx_dps, float by_dps, float bz_dps) {
+  return {mekf6::degToRad(bx_dps), mekf6::degToRad(-by_dps), mekf6::degToRad(-bz_dps)};
+}
+'''
+          assert old in text
+          text = text.replace(old, new, 1)
+
+          old_mean = '''      const mekf6::Vec3 mean_accel{
+          static_cast<float>(g_v46_mekf_run_reinit.ax_sum_g / n),
+          static_cast<float>(g_v46_mekf_run_reinit.ay_sum_g / n),
+          static_cast<float>(g_v46_mekf_run_reinit.az_sum_g / n)};
+'''
+          new_mean = '''      const mekf6::Vec3 mean_accel_raw{
+          static_cast<float>(g_v46_mekf_run_reinit.ax_sum_g / n),
+          static_cast<float>(g_v46_mekf_run_reinit.ay_sum_g / n),
+          static_cast<float>(g_v46_mekf_run_reinit.az_sum_g / n)};
+      // Same R_x(pi) sensor-to-body transform used by updateFilterSeries().
+      const mekf6::Vec3 mean_accel{
+          mean_accel_raw.x, -mean_accel_raw.y, -mean_accel_raw.z};
+'''
+          assert old_mean in text
+          text = text.replace(old_mean, new_mean, 1)
+          p.write_text(text, encoding='utf-8')
+
+          c = Path('src/config.h')
+          cfg = c.read_text(encoding='utf-8')
+          old_rev = 'v46b_mekf_upright_reinit_dynamic_beta_compare_20260913'
+          new_rev = 'v46c_mekf_rx180_upright_reinit_dynamic_beta_compare_20260913'
+          assert old_rev in cfg
+          c.write_text(cfg.replace(old_rev, new_rev, 1), encoding='utf-8')
+          PY
+          git diff --check
+          grep -q 'return {r.ax_g, -r.ay_g, -r.az_g};' src/experiment_runner.cpp
+          grep -q 'mekf6::degToRad(r.gx_dps), mekf6::degToRad(-r.gy_dps), mekf6::degToRad(-r.gz_dps)' src/experiment_runner.cpp
+          grep -q 'mean_accel_raw.x, -mean_accel_raw.y, -mean_accel_raw.z' src/experiment_runner.cpp
+          grep -q 'v46c_mekf_rx180_upright_reinit_dynamic_beta_compare_20260913' src/config.h
+      - name: Commit V46c frame fix
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add src/experiment_runner.cpp src/config.h
+          git commit -m "Use Rx180 body frame for V46c MEKF"
+          git push origin HEAD:main
