@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'tools/apply_v46i_task_split_patch.py'
+      - 'tools/fix_v46i_snapshot_guard.py'
       - 'tools/test_v46i_task_split_source_guards.py'
       - '.github/workflows/apply-v46i-task-split.yml'
   workflow_dispatch:
@@ -24,7 +25,9 @@ jobs:
         with:
           python-version: '3.x'
       - name: Apply V46i dual-core task split
-        run: python tools/apply_v46i_task_split_patch.py
+        run: |
+          python tools/apply_v46i_task_split_patch.py
+          python tools/fix_v46i_snapshot_guard.py
       - name: Run V46i source guards
         run: python tools/test_v46i_task_split_source_guards.py
       - name: Commit V46i core
