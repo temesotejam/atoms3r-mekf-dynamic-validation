@@ -15,13 +15,13 @@ jobs:
           python-version: "3.x"
       - name: Install PlatformIO
         run: pip install --upgrade platformio
-      - name: Verify V46g validation identity
-        run: grep -R -q "v46g_mekf_400hz_predict_200hz_accel_20260913" src
+      - name: Verify V46h validation identity
+        run: grep -R -q "v46h_mekf_400hz_web_quiet_predict_20260913" src
       - name: Run V46 source guard
         run: python tools/test_current_audit_source_guards.py
-      - name: Run V46g motor-path guard
+      - name: Run V46h motor-path guard
         run: python tools/test_v46_motor_validation_source_guards.py
-      - name: Run V46g high-rate guard
+      - name: Run V46h high-rate guard
         run: python tools/test_v46g_highrate_source_guards.py
       - name: Run RWLOG v46 regression
         run: python tools/test_rwlog_v46_converter.py
@@ -48,7 +48,7 @@ jobs:
             0xe000 dist/boot_app0.bin \
             0x10000 dist/firmware.bin
           printf '%s\n' \
-            'AtomS3R V46g MEKF 400Hz gyro / 200Hz accel / predicted-control flash layout' \
+            'AtomS3R V46h MEKF 400Hz gyro / 200Hz accel / predicted-control / web-quiet flash layout' \
             '0x0000  bootloader.bin' \
             '0x8000  partitions.bin' \
             '0xe000  boot_app0.bin' \
@@ -56,10 +56,10 @@ jobs:
             'merged-firmware.bin: write at 0x0000' \
             > dist/FLASH_LAYOUT.txt
           (cd dist && sha256sum bootloader.bin partitions.bin boot_app0.bin firmware.bin merged-firmware.bin > SHA256SUMS.txt)
-      - name: Upload flashable V46g firmware
+      - name: Upload flashable V46h firmware
         uses: actions/upload-artifact@v4
         with:
-          name: atoms3r-v46g-mekf-400hz-predicted-control-${{ github.sha }}
+          name: atoms3r-v46h-mekf-400hz-web-quiet-predicted-control-${{ github.sha }}
           path: dist/
           if-no-files-found: error
           retention-days: 30
