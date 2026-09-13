@@ -1,6 +1,9 @@
 #pragma once
 
 #include <Arduino.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/queue.h>
+#include <freertos/task.h>
 
 struct RollerTelemetry {
   bool roller_ok = false;
@@ -13,9 +16,6 @@ struct RollerTelemetry {
   uint8_t status_raw = 0;
   uint8_t error_raw = 0;
 
-  // Freshness is about CURRENT_READBACK only. `current_valid` is true exactly
-  // when the most recent current-read attempt succeeded; on failure the numeric
-  // current remains the previous sample and must not be used as a new sample.
   uint32_t current_sample_time_us = 0;
   uint32_t current_sequence = 0;
   uint32_t current_read_failure_count = 0;
@@ -23,22 +23,46 @@ struct RollerTelemetry {
   float q_meas_observed_mA_s = NAN;
   bool current_valid = false;
   bool q_meas_observed_valid = false;
+
+  // V46i task-split diagnostics. These are status-only and do not alter RWLOG v46.
+  bool io_task_running = false;
+  int16_t requested_current_mA = 0;
+  int16_t applied_current_mA = 0;
+  uint32_t last_command_latency_us = 0;
+  uint32_t max_command_latency_us = 0;
+  uint32_t command_sequence = 0;
+  uint32_t applied_command_sequence = 0;
 };
 
 class Roller485Manager {
 public:
   bool begin();
+  bool startIoTask(uint8_t core_id, uint8_t priority, uint32_t stack_bytes);
+
+  // Called only by the dedicated Roller I/O task after V46i starts.
   void update();
 
+  // Control-core API: queue a desired current; no Roller I2C is performed here.
   bool setCurrentMa(int16_t current_mA);
   bool stop();
 
-  const RollerTelemetry& telemetry() const { return telemetry_; }
+  RollerTelemetry telemetrySnapshot() const;
   uint32_t currentAgeUs(uint32_t now_us) const;
-  bool ok() const { return telemetry_.roller_ok && telemetry_.consecutive_errors < 5 && telemetry_.error_raw == 0; }
+  bool ok() const;
   const char* lastError() const { return last_error_; }
 
 private:
+  struct RollerCommand {
+    int16_t current_mA = 0;
+    uint32_t requested_us = 0;
+    uint32_t sequence = 0;
+  };
+
+  static void ioTaskEntry(void* arg);
+  void ioTaskLoop();
+  bool applyCurrentMa(const RollerCommand& cmd);
+  void publishTelemetry();
+
   bool writeU8(uint8_t reg, uint8_t value);
   bool writeI32(uint8_t reg, int32_t value);
   bool readBytes(uint8_t reg, uint8_t* buffer, size_t len);
@@ -52,6 +76,15 @@ private:
   void recordIo(bool ok);
 
   RollerTelemetry telemetry_;
+  RollerTelemetry telemetry_snapshot_;
+  mutable portMUX_TYPE telemetry_mux_ = portMUX_INITIALIZER_UNLOCKED;
+
+  QueueHandle_t command_queue_ = nullptr;
+  TaskHandle_t io_task_handle_ = nullptr;
+  volatile bool io_task_running_ = false;
+  volatile int16_t requested_current_mA_ = 0;
+  uint32_t command_sequence_ = 0;
+
   uint32_t last_read_due_us_ = 0;
   uint32_t last_fast_current_due_us_ = 0;
   int16_t command_mA_ = 0;

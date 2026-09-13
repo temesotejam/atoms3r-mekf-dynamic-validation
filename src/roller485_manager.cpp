@@ -22,6 +22,7 @@ bool Roller485Manager::begin() {
   if (!present) {
     telemetry_.roller_ok = false;
     last_error_ = "roller_not_found";
+    publishTelemetry();
     return false;
   }
 
@@ -33,16 +34,87 @@ bool Roller485Manager::begin() {
   telemetry_.mode_raw = Config::ROLLER_MODE_CURRENT;
   telemetry_.output_raw = 0;
   command_mA_ = 0;
+  requested_current_mA_ = 0;
+  telemetry_.requested_current_mA = 0;
+  telemetry_.applied_current_mA = 0;
   last_error_ = ok ? "" : "roller_zero_failed";
+  publishTelemetry();
   return ok;
+}
+
+bool Roller485Manager::startIoTask(uint8_t core_id, uint8_t priority, uint32_t stack_bytes) {
+  if (io_task_running_) return true;
+  if (command_queue_ == nullptr) {
+    command_queue_ = xQueueCreate(4, sizeof(RollerCommand));
+    if (command_queue_ == nullptr) {
+      last_error_ = "roller_command_queue_create_failed";
+      return false;
+    }
+  }
+  const BaseType_t rc = xTaskCreatePinnedToCore(
+      &Roller485Manager::ioTaskEntry, "roller485-io", stack_bytes, this,
+      priority, &io_task_handle_, core_id);
+  if (rc != pdPASS) {
+    vQueueDelete(command_queue_);
+    command_queue_ = nullptr;
+    io_task_handle_ = nullptr;
+    last_error_ = "roller_io_task_create_failed";
+    return false;
+  }
+  return true;
+}
+
+void Roller485Manager::ioTaskEntry(void* arg) {
+  static_cast<Roller485Manager*>(arg)->ioTaskLoop();
+}
+
+void Roller485Manager::ioTaskLoop() {
+  io_task_running_ = true;
+  telemetry_.io_task_running = true;
+  publishTelemetry();
+
+  for (;;) {
+    RollerCommand cmd;
+    while (command_queue_ && xQueueReceive(command_queue_, &cmd, 0) == pdTRUE) {
+      if (!applyCurrentMa(cmd)) {
+        // Fail closed inside the I/O owner task. A failed nonzero write is never
+        // allowed to leave a requested output latched without an immediate zero attempt.
+        requested_current_mA_ = 0;
+        RollerCommand zero;
+        zero.current_mA = 0;
+        zero.requested_us = micros();
+        zero.sequence = ++command_sequence_;
+        applyCurrentMa(zero);
+      }
+    }
+
+    update();
+
+    // Independent fail-closed reconciliation: if the desired state is zero but
+    // either the applied command or observed OUTPUT is nonzero, force zero here.
+    if (requested_current_mA_ == 0 && (command_mA_ != 0 || telemetry_.output_raw != 0)) {
+      RollerCommand zero;
+      zero.current_mA = 0;
+      zero.requested_us = micros();
+      zero.sequence = ++command_sequence_;
+      applyCurrentMa(zero);
+    }
+
+    telemetry_.io_task_running = true;
+    telemetry_.requested_current_mA = requested_current_mA_;
+    telemetry_.applied_current_mA = command_mA_;
+    publishTelemetry();
+
+    // A new motor command wakes this task immediately; otherwise yield Core 0
+    // for roughly 1 ms to Wi-Fi/system work before the next audit/telemetry pass.
+    ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(1));
+  }
 }
 
 void Roller485Manager::update() {
   const uint32_t now_us = micros();
 
-  // The existing full six-register safety/status snapshot remains scheduled at
-  // 20 ms. During an output pulse, this adds a separate CURRENT_READBACK-only
-  // diagnostic sample. Its result is log-only and cannot affect control.
+  // V46i keeps the full 2 ms current audit, but it now runs only on Core 0.
   if (command_mA_ != 0 &&
       (last_fast_current_due_us_ == 0 ||
        static_cast<uint32_t>(now_us - last_fast_current_due_us_) >=
@@ -53,7 +125,7 @@ void Roller485Manager::update() {
 
   const uint32_t period_us = Config::ROLLER_READ_PERIOD_MS * 1000UL;
   if (last_read_due_us_ != 0 && static_cast<uint32_t>(now_us - last_read_due_us_) < period_us) return;
-  last_read_due_us_ = last_read_due_us_ == 0 ? now_us : last_read_due_us_ + period_us;
+  last_read_due_us_ = now_us;
 
   int32_t vin_raw = 0;
   uint8_t mode = 0;
@@ -80,39 +152,111 @@ void Roller485Manager::update() {
 }
 
 bool Roller485Manager::setCurrentMa(int16_t current_mA) {
-  const bool was_commanded = command_mA_ != 0;
-  const int32_t raw = static_cast<int32_t>(current_mA) * Config::ROLLER_CURRENT_RAW_PER_MA;
-  bool ok = true;
-  ok &= writeU8(REG_MODE, Config::ROLLER_MODE_CURRENT);
-  ok &= writeI32(REG_CURRENT, raw);
-  ok &= writeU8(REG_OUTPUT, current_mA == 0 ? 0 : 1);
-  recordIo(ok);
-  if (!ok) {
-    last_error_ = "roller_current_write_failed";
+  if (current_mA == 0) return stop();
+  if (!io_task_running_ || command_queue_ == nullptr || io_task_handle_ == nullptr) {
+    last_error_ = "roller_io_task_not_running";
     return false;
   }
+  if (requested_current_mA_ == current_mA) return true;
 
-  command_mA_ = current_mA;
-  telemetry_.mode_raw = Config::ROLLER_MODE_CURRENT;
-  telemetry_.output_raw = current_mA == 0 ? 0 : 1;
-  if (!was_commanded && current_mA != 0) beginCurrentAuditPulse();
-  else if (was_commanded && current_mA == 0) endCurrentAuditPulse();
+  RollerCommand cmd;
+  cmd.current_mA = current_mA;
+  cmd.requested_us = micros();
+  cmd.sequence = ++command_sequence_;
+  if (xQueueSend(command_queue_, &cmd, 0) != pdTRUE) {
+    last_error_ = "roller_command_queue_full";
+    return false;
+  }
+  requested_current_mA_ = current_mA;
+  xTaskNotifyGive(io_task_handle_);
   return true;
 }
 
 bool Roller485Manager::stop() {
-  // `serviceFast()` and the idle/finished runner states call stop repeatedly.
-  // Once the commanded current and the observed output are already zero, do
-  // not issue three redundant I2C writes every loop. If the 20 ms telemetry
-  // snapshot ever observes OUTPUT=1 unexpectedly, the next call will force a
-  // real zero-current/output-off write again.
-  if (command_mA_ == 0 && telemetry_.output_raw == 0) return true;
-  return setCurrentMa(0);
+  if (!io_task_running_ || command_queue_ == nullptr || io_task_handle_ == nullptr) {
+    // Before the task starts, only a zero command is allowed and is applied
+    // synchronously for fail-safe setup/teardown.
+    RollerCommand zero;
+    zero.current_mA = 0;
+    zero.requested_us = micros();
+    zero.sequence = ++command_sequence_;
+    requested_current_mA_ = 0;
+    return applyCurrentMa(zero);
+  }
+  if (requested_current_mA_ == 0) return true;
+
+  // Stop has priority over any not-yet-applied nonzero request.
+  xQueueReset(command_queue_);
+  RollerCommand zero;
+  zero.current_mA = 0;
+  zero.requested_us = micros();
+  zero.sequence = ++command_sequence_;
+  if (xQueueSend(command_queue_, &zero, 0) != pdTRUE) {
+    last_error_ = "roller_stop_queue_failed";
+    return false;
+  }
+  requested_current_mA_ = 0;
+  xTaskNotifyGive(io_task_handle_);
+  return true;
+}
+
+bool Roller485Manager::applyCurrentMa(const RollerCommand& cmd) {
+  const bool was_commanded = command_mA_ != 0;
+  const int32_t raw = static_cast<int32_t>(cmd.current_mA) * Config::ROLLER_CURRENT_RAW_PER_MA;
+  bool ok = true;
+  ok &= writeU8(REG_MODE, Config::ROLLER_MODE_CURRENT);
+  ok &= writeI32(REG_CURRENT, raw);
+  ok &= writeU8(REG_OUTPUT, cmd.current_mA == 0 ? 0 : 1);
+  recordIo(ok);
+
+  const uint32_t applied_us = micros();
+  const uint32_t latency_us = static_cast<uint32_t>(applied_us - cmd.requested_us);
+  telemetry_.last_command_latency_us = latency_us;
+  if (latency_us > telemetry_.max_command_latency_us) telemetry_.max_command_latency_us = latency_us;
+  telemetry_.command_sequence = cmd.sequence;
+
+  if (!ok) {
+    last_error_ = "roller_current_write_failed";
+    telemetry_.roller_ok = false;
+    publishTelemetry();
+    return false;
+  }
+
+  command_mA_ = cmd.current_mA;
+  telemetry_.applied_command_sequence = cmd.sequence;
+  telemetry_.mode_raw = Config::ROLLER_MODE_CURRENT;
+  telemetry_.output_raw = cmd.current_mA == 0 ? 0 : 1;
+  telemetry_.applied_current_mA = cmd.current_mA;
+  if (!was_commanded && cmd.current_mA != 0) beginCurrentAuditPulse();
+  else if (was_commanded && cmd.current_mA == 0) endCurrentAuditPulse();
+  last_error_ = "";
+  publishTelemetry();
+  return true;
+}
+
+RollerTelemetry Roller485Manager::telemetrySnapshot() const {
+  RollerTelemetry out;
+  portENTER_CRITICAL(&telemetry_mux_);
+  out = telemetry_snapshot_;
+  portEXIT_CRITICAL(&telemetry_mux_);
+  return out;
+}
+
+void Roller485Manager::publishTelemetry() {
+  portENTER_CRITICAL(&telemetry_mux_);
+  telemetry_snapshot_ = telemetry_;
+  portEXIT_CRITICAL(&telemetry_mux_);
 }
 
 uint32_t Roller485Manager::currentAgeUs(uint32_t now_us) const {
-  if (telemetry_.current_sample_time_us == 0) return UINT32_MAX;
-  return static_cast<uint32_t>(now_us - telemetry_.current_sample_time_us);
+  const RollerTelemetry t = telemetrySnapshot();
+  if (t.current_sample_time_us == 0) return UINT32_MAX;
+  return static_cast<uint32_t>(now_us - t.current_sample_time_us);
+}
+
+bool Roller485Manager::ok() const {
+  const RollerTelemetry t = telemetrySnapshot();
+  return t.roller_ok && t.consecutive_errors < 5 && t.error_raw == 0;
 }
 
 bool Roller485Manager::readCurrentFresh(bool audit_sample) {

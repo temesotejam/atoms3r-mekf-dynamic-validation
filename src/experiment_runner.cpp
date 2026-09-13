@@ -124,8 +124,9 @@ void ExperimentRunner::update() {
   if (!logger_ || !imu_ || !roller_) return;
   const uint32_t now_ms = millis();
   status_.boot_elapsed_ms = now_ms - boot_start_ms_;
-  status_.roller_actual_current_mA = roller_->telemetry().actual_current_mA;
-  status_.roller_battery_mV = roller_->telemetry().battery_mV;
+  const RollerTelemetry roller_snapshot = roller_->telemetrySnapshot();
+  status_.roller_actual_current_mA = roller_snapshot.actual_current_mA;
+  status_.roller_battery_mV = roller_snapshot.battery_mV;
 
   const ImuReading& r = imu_->reading();
   if (r.gyro_sequence != 0 && r.gyro_sequence != last_imu_update_us_) {
@@ -5290,7 +5291,7 @@ void ExperimentRunner::logSampleNow() {
   row.gy_cdps = centi(status_.gy_dps);
   row.gz_cdps = centi(status_.gz_dps);
   row.acc_norm_mg = milli(status_.acc_norm_g);
-  const RollerTelemetry& roller_telemetry = roller_->telemetry();
+  const RollerTelemetry roller_telemetry = roller_->telemetrySnapshot();
   row.roller_actual_current_mA = roller_telemetry.actual_current_mA;
   row.roller_battery_mV = roller_telemetry.battery_mV;
   row.roller_current_sample_time_us = roller_telemetry.current_sample_time_us;
@@ -5369,7 +5370,7 @@ void ExperimentRunner::stopMotor() {
   status_.motor_cmd_mA = 0;
   status_.pulse_active = false;
   status_.pulse_direction = 0;
-  if (roller_) status_.roller_actual_current_mA = roller_->telemetry().actual_current_mA;
+  if (roller_) status_.roller_actual_current_mA = roller_->telemetrySnapshot().actual_current_mA;
 }
 
 void ExperimentRunner::setSyncLed(bool on) {

@@ -239,7 +239,7 @@ void WebUi::appendJsonUint64(String& json, uint64_t value) {
 
 String WebUi::statusJson() const {
   const auto& st = runner_->status();
-  const auto& roller = roller_->telemetry();
+  const RollerTelemetry roller = roller_->telemetrySnapshot();
   char filename[72];
   logger_->downloadFilename(filename, sizeof(filename));
   String json;
@@ -352,6 +352,9 @@ String WebUi::statusJson() const {
   json += ",\"imu_ok\":" + String(imu_->ok() ? "true" : "false");
   json += ",\"roller_ok\":" + String(roller_->ok() ? "true" : "false");
   json += ",\"roller_actual_current_mA\":" + String(roller.actual_current_mA);
+  json += ",\"roller_io_task_running\":" + String(roller.io_task_running ? "true" : "false");
+  json += ",\"roller_command_latency_us\":" + String(roller.last_command_latency_us);
+  json += ",\"roller_command_latency_max_us\":" + String(roller.max_command_latency_us);
   json += ",\"battery_mV\":" + String(roller.battery_mV);
   json += ",\"loop_dt_us\":" + String(st.loop_dt_us);
   json += ",\"log_dt_us\":" + String(st.log_dt_us);

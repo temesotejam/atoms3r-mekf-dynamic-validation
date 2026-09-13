@@ -75,18 +75,18 @@ void setup() {
   Serial.begin(Config::SERIAL_BAUD);
   delay(300);
   Serial.println();
-  Serial.println("AtomS3R V46h MEKF motor-driven dynamic validation");
+  Serial.println("AtomS3R V46i MEKF dual-core motor validation");
 
   auto cfg = M5.config();
   cfg.serial_baudrate = 0;
   cfg.internal_imu = true;
   M5.begin(cfg);
-  Serial.printf("V46h identity: board=%d imu_type=%d M5Unified=%s M5GFX=%s AHRS=%s base=%s attitude=%s\n",
+  Serial.printf("V46i identity: board=%d imu_type=%d M5Unified=%s M5GFX=%s AHRS=%s base=%s attitude=%s\n",
                 static_cast<int>(M5.getBoard()), static_cast<int>(M5.Imu.getType()),
                 Config::RESOLVED_M5UNIFIED_VERSION, Config::RESOLVED_M5GFX_VERSION,
                 Config::RESOLVED_ADAFRUIT_AHRS_VERSION, Config::V62_BASE_COMMIT,
                 Config::ATTITUDE_VALIDATION_REVISION);
-  displayLine("V46h MEKF", "V7 MOTOR VALIDATION");
+  displayLine("V46i MEKF", "DUAL-CORE V7");
 
   const bool psram_ok = logger.begin();
   Serial.printf("PSRAM: %s total=%u free=%u sample_capacity=%u\n", psram_ok ? "OK" : "FAILED",
@@ -99,7 +99,12 @@ void setup() {
 
   const bool roller_ok = roller.begin();
   roller.stop();
-  Serial.printf("Roller485: %s\n", roller_ok ? "OK" : "FAILED");
+  const bool roller_task_ok = roller_ok && roller.startIoTask(
+      Config::ROLLER_IO_TASK_CORE, Config::ROLLER_IO_TASK_PRIORITY,
+      Config::ROLLER_IO_TASK_STACK_BYTES);
+  Serial.printf("Roller485: %s task=%s core=%u priority=%u\n",
+                roller_ok ? "OK" : "FAILED", roller_task_ok ? "OK" : "FAILED",
+                Config::ROLLER_IO_TASK_CORE, Config::ROLLER_IO_TASK_PRIORITY);
 
   runner.begin(logger, imu, roller);
   web.begin(server, runner, imu, roller, logger);
@@ -111,15 +116,24 @@ void setup() {
 
 void loop() {
   const uint32_t loop_start_us = micros();
-  M5.update();
 
+  // Core 1 timing path: BMI270 -> MEKF -> predicted control -> V7 state machine.
+  // Roller485 I2C/current audit is owned by the dedicated Core 0 task.
   runner.serviceFast();
   runner.updateImuDynamicBetaContext();
   imu.update();
-  roller.update();
   runner.update();
-  updateStartupPoseGuide();
+
+  // Display/button servicing is unnecessary during the measurement itself.
+  if (!runner.running()) {
+    M5.update();
+    updateStartupPoseGuide();
+  }
+  // V46h/V46i browser code does not poll status while a measurement is active;
+  // keeping handleClient here preserves emergency-stop POST handling without
+  // introducing a second thread that mutates ExperimentRunner.
   web.update();
 
   runner.setLoopDt(static_cast<uint32_t>(micros() - loop_start_us));
+  taskYIELD();
 }
