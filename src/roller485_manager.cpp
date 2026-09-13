@@ -81,7 +81,6 @@ void Roller485Manager::update() {
 
 bool Roller485Manager::setCurrentMa(int16_t current_mA) {
   const bool was_commanded = command_mA_ != 0;
-  command_mA_ = current_mA;
   const int32_t raw = static_cast<int32_t>(current_mA) * Config::ROLLER_CURRENT_RAW_PER_MA;
   bool ok = true;
   ok &= writeU8(REG_MODE, Config::ROLLER_MODE_CURRENT);
@@ -92,12 +91,22 @@ bool Roller485Manager::setCurrentMa(int16_t current_mA) {
     last_error_ = "roller_current_write_failed";
     return false;
   }
+
+  command_mA_ = current_mA;
+  telemetry_.mode_raw = Config::ROLLER_MODE_CURRENT;
+  telemetry_.output_raw = current_mA == 0 ? 0 : 1;
   if (!was_commanded && current_mA != 0) beginCurrentAuditPulse();
   else if (was_commanded && current_mA == 0) endCurrentAuditPulse();
   return true;
 }
 
 bool Roller485Manager::stop() {
+  // `serviceFast()` and the idle/finished runner states call stop repeatedly.
+  // Once the commanded current and the observed output are already zero, do
+  // not issue three redundant I2C writes every loop. If the 20 ms telemetry
+  // snapshot ever observes OUTPUT=1 unexpectedly, the next call will force a
+  // real zero-current/output-off write again.
+  if (command_mA_ == 0 && telemetry_.output_raw == 0) return true;
   return setCurrentMa(0);
 }
 
