@@ -1,56 +1,64 @@
-# First V46 dynamic validation
+# First V46 motor-driven dynamic validation
 
-This is the required first hardware check for the V46 MEKF build. Do **not** begin with Autonomous Energy Control. The first run is a passive/manual-motion capture with motor output at 0 mA.
+This is the intended first performance measurement for the V46 MEKF build: run the mechanism with **Autonomous Energy Control V7**, record the same motion with a fixed-horizon video, and compare MEKF against the online dynamic-beta Madgwick estimator in RWLOG v46.
 
-## Goal
+A passive capture remains available as an optional diagnostic, but it is **not required before this motor-driven validation**.
 
-Verify on the real AtomS3R/IMU installation that:
+## What the firmware does
 
-- the adopted MEKF angle has the intended static and dynamic sign,
-- the online dynamic-beta Madgwick comparison is recorded at the same time,
-- adaptive accelerometer rejection behaves plausibly,
-- RWLOG v46 timing and LED video anchors are present,
-- the passive path keeps all motor/current/pulse commands at zero.
+During the 30 s Autonomous V7 capture:
 
-Only after this run passes should the autonomous V7 motion experiment be attempted.
+- MEKF is the adopted control/detector attitude.
+- Dynamic-beta Madgwick `hold073` runs online at the same time as a comparison-only estimator.
+- The run begins with one startup-only `300 mA / 100 ms` kick in the configured start direction.
+- After the first confirmed physical peak, P1/Q1 Energy Control can command later pulses at accepted zero-cross events.
+- Normal autonomous current is 300 mA; pulse width is selected within the V7 output guard (`0..100 ms`, where zero means no output).
+- Raw IMU, gyro-only integration, accel-only angle, actual current, MEKF diagnostics, LED video anchors, and both estimator angles are logged.
+- Emergency stop and the existing motor/current safety path remain active.
 
-## Firmware
+The expected attitude revision is:
 
-Use a successful GitHub Actions artifact from the `feature/v46-mekf-dynamic-validation` branch. The artifact contains:
+`v46_mekf_adopted_dynamic_beta_compare_20260912`
+
+## Firmware artifact
+
+Use a successful GitHub Actions artifact from branch:
+
+`feature/v46-mekf-dynamic-validation`
+
+The artifact contains:
 
 - `bootloader.bin` at `0x0000`
 - `partitions.bin` at `0x8000`
 - `boot_app0.bin` at `0xe000`
 - `firmware.bin` at `0x10000`
-- `merged-firmware.bin`, which contains the same four images at those offsets and is written starting at `0x0000`
+- `merged-firmware.bin` containing the same four images, written from `0x0000`
 - `SHA256SUMS.txt`
 - `FLASH_LAYOUT.txt`
 
-The expected V46 attitude revision is:
+## After flashing
 
-`v46_mekf_adopted_dynamic_beta_compare_20260912`
+1. Power the mechanism normally.
+2. Wait through startup gyro calibration and estimator settling until the UI allows a run to start.
+3. Connect the PC/phone to the firmware AP defined in `src/config.h`.
+4. Open `http://192.168.4.1/`.
+5. Confirm that the UI reports the roller and IMU as ready and that no previous ESTOP remains latched.
+6. Start a fixed-horizon video with the synchronization LED visible.
 
-## Before starting
+## Motor-driven Run 1
 
-1. Place the mechanism in a safe bench setup with the reaction wheel clear of hands, cables, and fixtures.
-2. Power the system normally, but **do not press `Start autonomous energy control`** during this first validation.
-3. Wait for the firmware/UI to reach a state in which a capture can be started.
-4. Connect to the firmware access point and open `http://192.168.4.1/`.
-5. Start the fixed-horizon video before starting the capture so the complete START/MID/END LED sequence is visible.
+For the first run use the default **8.0 deg** target.
 
-Current firmware AP settings are defined in `src/config.h`.
+1. Put the mechanism upright in its normal initial condition.
+2. In the web UI select `8.0 deg` as the Autonomous Energy Control target.
+3. Press **Start autonomous energy control**.
+4. Do not manually push the mechanism after starting; the firmware supplies the startup kick itself.
+5. Keep the complete mechanism and synchronization LED visible in the video.
+6. Let the 30 s capture complete unless an abnormal motion requires Emergency stop.
+7. Keep the video running through the END synchronization signature.
+8. Download the RWLOG from the web UI after the run finishes.
 
-## Run 1: passive/manual-motion validation
-
-1. Keep the mechanism still initially.
-2. In the web UI press **Start passive capture**.
-3. Observe the START LED synchronization pattern.
-4. After the START signature, move/release the mechanism manually once so it performs a representative free rocking motion.
-5. Do not press the autonomous-control button during the run.
-6. Keep recording through the END LED signature.
-7. Download the RWLOG from the web UI.
-
-The passive capture is the motor-off validation path. Every sample in this first run must retain zero motor/current/pulse command fields.
+Do not change the control target during a run.
 
 ## Convert the RWLOG
 
@@ -58,82 +66,63 @@ The passive capture is the motor-off validation path. Every sample in this first
 python tools\convert_rwlog_to_csv.py <run>.rwlog --out converted_run
 ```
 
-Use the generated `timeseries.csv` for the first checks.
+Use `converted_run/timeseries.csv` for the estimator comparison.
 
-## Mandatory checks
+## Signals for attitude-performance evaluation
 
-### 1. Passive path remained motor OFF
+Use these continuous absolute-angle signals against video ground truth:
 
-Across the full passive run verify that the command fields remain zero, including:
-
-- `motor_cmd_mA == 0`
-- `current_mA_setting == 0`
-- `pulse_width_ms == 0`
-- `pulse_active == 0`
-
-A non-zero value is a stop condition for further V46 validation.
-
-### 2. V46 estimator signals exist
-
-Confirm the converted log contains valid samples for:
-
-- `pitch_mekf_control_deg`
 - `pitch_mekf_abs_deg`
 - `pitch_madgwick_dynamic_abs_deg`
-- `mekf_q_w/x/y/z`
-- `mekf_bias_x/y/z_dps`
+
+Do not use `pitch_mekf_control_deg` as the video ground-truth coordinate; it is the run-relative angle used by control.
+
+Also inspect:
+
 - `mekf_accel_confidence`
 - `mekf_accel_residual_deg`
 - `mekf_accel_mag_error_g`
+- `mekf_accel_used`
+- `mekf_bias_x_dps`, `mekf_bias_y_dps`, `mekf_bias_z_dps`
 - `imu_update_dt_us`
 - `imu_sample_age_us`
-- `mekf_accel_used`
-- `attitude_filter_adopted`
+- `motor_cmd_mA`
+- `roller_actual_current_mA`
+- `pulse_active`
+- `led_state`
+- `sync_event_id`
 
-`attitude_filter_adopted` must identify MEKF (`1`).
+## Video synchronization
 
-### 3. Sign and continuity
+Use the logged LED anchors to map video time to RWLOG time before computing error or lag:
 
-Use the known physical direction of the manual motion to confirm that MEKF pitch follows the historical detector convention. Check for unexpected sign reversal, jumps, resets, or discontinuities.
-
-For video comparison use:
-
-- `pitch_mekf_abs_deg`
-- `pitch_madgwick_dynamic_abs_deg`
-
-Do **not** use `pitch_mekf_control_deg` as the absolute video angle because it is run-relative/zero-subtracted for control.
-
-### 4. Adaptive accelerometer handling
-
-During clean gravity-dominated motion, `mekf_accel_confidence` should remain high and `mekf_accel_used` should normally be `1`. During clearly contaminated acceleration, confidence may fall and `mekf_accel_used` may become `0`.
-
-The first run is not intended to tune rejection thresholds. It is intended to verify that the real hardware produces sane diagnostics and that rejection is not permanently stuck ON or OFF.
-
-### 5. Timing
-
-Check `imu_update_dt_us` and `imu_sample_age_us` for large gaps or pathological outliers. The configured IMU period is 5 ms; the log period is 20 ms.
-
-### 6. Video synchronization
-
-Confirm the RWLOG includes `led_state` and `sync_event_id` events corresponding to:
-
-- START signature,
+- START signature before the measurement interval,
 - first MID anchor at 2.5 s,
 - later MID anchors every 5.0 s,
-- END signature.
+- END signature after the measurement interval.
 
-Construct the video/RWLOG time mapping from these anchors before measuring estimator error or lag from video.
+Do not align the two streams only by pressing the start button; use the LED anchors.
 
-## Pass condition for proceeding to Autonomous V7
+## What to calculate
 
-Proceed only when all of the following are true:
+For both MEKF and dynamic-beta Madgwick, calculate against video angle:
 
-- passive motor/current/pulse commands are all zero,
-- MEKF has the correct physical sign and no unexplained discontinuity,
-- dynamic-beta Madgwick comparison data is present,
-- MEKF accel confidence/rejection signals are plausible,
-- V46 timing fields are healthy enough for comparison,
-- LED video anchors are recoverable,
-- RWLOG conversion/CRC succeeds.
+- bias / mean signed error,
+- MAE,
+- RMSE,
+- maximum absolute error,
+- error during motor-pulse windows,
+- error during non-pulse windows,
+- best-fit time lag relative to video,
+- error grouped by MEKF accel update used/rejected,
+- error grouped by acceleration-confidence range.
 
-After this pass, the next experiment is the controlled Autonomous Energy Control V7 capture using the same V46 firmware, with MEKF as the adopted angle and dynamic-beta Madgwick as comparison-only.
+The main question is not simply which trace looks smoother. The useful result is whether MEKF gives smaller dynamic angle error and/or smaller lag during the actual motor-driven motion, especially around pulse transients where accelerometer contamination is expected.
+
+## Run 2 / Run 3
+
+After the first 8 deg run is healthy, repeat with the same firmware and camera geometry. Prefer at least two additional runs before changing estimator parameters. The 10 deg and 12 deg target options can then be used to increase dynamic severity, but estimator tuning should not be changed between comparison runs.
+
+## Stop conditions
+
+Use Emergency stop if the mechanism leaves its intended mechanical envelope, the roller behaves unexpectedly, or the UI reports a hardware error. A stopped/invalid run is still useful diagnostically if its RWLOG can be downloaded; do not treat it as an estimator-performance run.
