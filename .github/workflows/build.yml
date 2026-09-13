@@ -15,11 +15,11 @@ jobs:
           python-version: "3.x"
       - name: Install PlatformIO
         run: pip install --upgrade platformio
-      - name: Verify V46d validation identity
-        run: grep -R -q "v46d_mekf_video_calibrated_rx180_upright_reinit_20260913" src
+      - name: Verify V46e validation identity
+        run: grep -R -q "v46e_mekf_ry180_physical_frame_upright_reinit_20260913" src
       - name: Run V46 source guard
         run: python tools/test_current_audit_source_guards.py
-      - name: Run V46d motor-path guard
+      - name: Run V46e motor-path guard
         run: python tools/test_v46_motor_validation_source_guards.py
       - name: Run RWLOG v46 regression
         run: python tools/test_rwlog_v46_converter.py
@@ -46,7 +46,7 @@ jobs:
             0xe000 dist/boot_app0.bin \
             0x10000 dist/firmware.bin
           printf '%s\n' \
-            'AtomS3R V46d MEKF video-calibrated Rx180 upright-reinit dynamic-validation flash layout' \
+            'AtomS3R V46e MEKF Ry180 physical-frame upright-reinit dynamic-validation flash layout' \
             '0x0000  bootloader.bin' \
             '0x8000  partitions.bin' \
             '0xe000  boot_app0.bin' \
@@ -54,10 +54,10 @@ jobs:
             'merged-firmware.bin: write at 0x0000' \
             > dist/FLASH_LAYOUT.txt
           (cd dist && sha256sum bootloader.bin partitions.bin boot_app0.bin firmware.bin merged-firmware.bin > SHA256SUMS.txt)
-      - name: Upload flashable V46d firmware
+      - name: Upload flashable V46e firmware
         uses: actions/upload-artifact@v4
         with:
-          name: atoms3r-v46d-mekf-video-calibrated-${{ github.sha }}
+          name: atoms3r-v46e-mekf-ry180-physical-frame-${{ github.sha }}
           path: dist/
           if-no-files-found: error
           retention-days: 30
