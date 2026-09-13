@@ -15,14 +15,16 @@ jobs:
           python-version: "3.x"
       - name: Install PlatformIO
         run: pip install --upgrade platformio
-      - name: Verify V46h validation identity
-        run: grep -R -q "v46h_mekf_400hz_web_quiet_predict_20260913" src
+      - name: Verify V46i validation identity
+        run: grep -R -q "v46i_mekf_400hz_dual_core_roller_queue_20260913" src
       - name: Run V46 source guard
         run: python tools/test_current_audit_source_guards.py
-      - name: Run V46h motor-path guard
+      - name: Run V46i motor-path guard
         run: python tools/test_v46_motor_validation_source_guards.py
-      - name: Run V46h high-rate guard
+      - name: Run V46i high-rate guard
         run: python tools/test_v46g_highrate_source_guards.py
+      - name: Run V46i task-split guard
+        run: python tools/test_v46i_task_split_source_guards.py
       - name: Run RWLOG v46 regression
         run: python tools/test_rwlog_v46_converter.py
       - name: Check V46 analysis tool
@@ -48,7 +50,7 @@ jobs:
             0xe000 dist/boot_app0.bin \
             0x10000 dist/firmware.bin
           printf '%s\n' \
-            'AtomS3R V46h MEKF 400Hz gyro / 200Hz accel / predicted-control / web-quiet flash layout' \
+            'AtomS3R V46i MEKF 400Hz gyro / 200Hz accel / predicted-control / dual-core Roller I/O flash layout' \
             '0x0000  bootloader.bin' \
             '0x8000  partitions.bin' \
             '0xe000  boot_app0.bin' \
@@ -56,10 +58,10 @@ jobs:
             'merged-firmware.bin: write at 0x0000' \
             > dist/FLASH_LAYOUT.txt
           (cd dist && sha256sum bootloader.bin partitions.bin boot_app0.bin firmware.bin merged-firmware.bin > SHA256SUMS.txt)
-      - name: Upload flashable V46h firmware
+      - name: Upload flashable V46i firmware
         uses: actions/upload-artifact@v4
         with:
-          name: atoms3r-v46h-mekf-400hz-web-quiet-predicted-control-${{ github.sha }}
+          name: atoms3r-v46i-mekf-400hz-dual-core-predicted-control-${{ github.sha }}
           path: dist/
           if-no-files-found: error
           retention-days: 30
