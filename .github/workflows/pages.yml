@@ -2,8 +2,7 @@ name: pages
 
 on:
   push:
-    branches: [main]
-  pull_request:
+    branches: ["feature/v46-mekf-dynamic-validation"]
   workflow_dispatch:
 
 permissions:
@@ -27,11 +26,15 @@ jobs:
       - name: Install PlatformIO
         run: pip install --upgrade platformio
 
-      - name: Build AtomS3R firmware
-        run: pio run -e atoms3r
+      - name: Validate V46 web files
+        run: |
+          test -s site/index.html
+          test -s site/styles.css
+          python -m json.tool site/manifest.json >/dev/null
+          grep -q "V46 MEKF Motor Validation" site/index.html
 
-      - name: Validate web JavaScript
-        run: node --check site/app.js
+      - name: Build V46 AtomS3R firmware
+        run: pio run -e atoms3cam
 
       - name: Assemble Pages artifact
         shell: bash
@@ -40,12 +43,13 @@ jobs:
           rm -rf _site
           mkdir -p _site/firmware
           cp -R site/. _site/
-          cp .pio/build/atoms3r/bootloader.bin _site/firmware/bootloader.bin
-          cp .pio/build/atoms3r/partitions.bin _site/firmware/partitions.bin
-          cp .pio/build/atoms3r/firmware.bin _site/firmware/firmware.bin
+          cp .pio/build/atoms3cam/bootloader.bin _site/firmware/bootloader.bin
+          cp .pio/build/atoms3cam/partitions.bin _site/firmware/partitions.bin
+          cp .pio/build/atoms3cam/firmware.bin _site/firmware/firmware.bin
           BOOT_APP0="$(find "$HOME/.platformio/packages/framework-arduinoespressif32" -type f -name boot_app0.bin | head -n 1)"
           test -n "$BOOT_APP0"
           cp "$BOOT_APP0" _site/firmware/boot_app0.bin
+          printf '%s\n' "$GITHUB_SHA" > _site/build-sha.txt
           python -m json.tool _site/manifest.json >/dev/null
           test -s _site/firmware/bootloader.bin
           test -s _site/firmware/partitions.bin
@@ -53,19 +57,16 @@ jobs:
           test -s _site/firmware/firmware.bin
 
       - name: Configure GitHub Pages
-        if: github.event_name != 'pull_request'
         uses: actions/configure-pages@v5
         with:
           enablement: true
 
       - name: Upload Pages artifact
-        if: github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@v3
         with:
           path: _site
 
   deploy:
-    if: github.event_name != 'pull_request'
     needs: build-site
     runs-on: ubuntu-latest
     environment:
