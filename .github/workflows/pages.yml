@@ -26,15 +26,16 @@ jobs:
       - name: Install PlatformIO
         run: pip install --upgrade platformio
 
-      - name: Validate V46b web files
+      - name: Validate V46c web files
         run: |
           test -s site/index.html
           test -s site/styles.css
           python -m json.tool site/manifest.json >/dev/null
-          grep -q "V46b MEKF Motor Validation" site/index.html
-          grep -q "v46b_mekf_upright_reinit_dynamic_beta_compare_20260913" site/index.html
+          grep -q "V46c MEKF Motor Validation" site/index.html
+          grep -q "v46c_mekf_rx180_upright_reinit_dynamic_beta_compare_20260913" site/index.html
+          grep -q '"version": "0.46.2"' site/manifest.json
 
-      - name: Build V46b AtomS3R firmware
+      - name: Build V46c AtomS3R firmware
         run: pio run -e atoms3cam
 
       - name: Assemble Pages artifact
