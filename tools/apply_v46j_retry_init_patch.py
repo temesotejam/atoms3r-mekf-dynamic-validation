@@ -23,7 +23,6 @@ def replace_between(path, start, end, replacement):
     j = text.index(end, i)
     write(path, text[:i] + replacement + '\n\n' + text[j:])
 
-# Retry/recovery timing. The task stays alive indefinitely; these are just retry cadence/thresholds.
 replace_once(
     'src/config.h',
     'static constexpr uint32_t ROLLER_IO_TASK_STACK_BYTES = 6144UL;\n',
@@ -31,7 +30,6 @@ replace_once(
     'static constexpr uint32_t ROLLER_IO_RETRY_PERIOD_MS = 100UL;\n'
     'static constexpr uint8_t ROLLER_IO_RECOVERY_ERROR_LIMIT = 3;\n')
 
-# Add recovery diagnostics to the published snapshot.
 replace_once(
     'src/roller485_manager.h',
     '  bool io_task_init_failed = false;\n',
@@ -46,8 +44,6 @@ replace_once(
     '  uint32_t io_recovery_count_ = 0;\n'
     '  uint32_t command_sequence_ = 0;\n')
 
-# Task creation success is separate from device readiness. We wait briefly so the normal
-# case is ready before setup continues, but a transient failure does NOT kill the task.
 replace_between(
     'src/roller485_manager.cpp',
     'bool Roller485Manager::startIoTask',
@@ -73,9 +69,6 @@ replace_between(
     return false;
   }
 
-  // Give the normal startup path a short opportunity to become READY. If the
-  // device is late or the first transaction fails, the Core 0 task remains
-  // alive and keeps retrying; setup continues so Wi-Fi/Web can still report it.
   const uint32_t start_ms = millis();
   while (!io_task_running_ && static_cast<uint32_t>(millis() - start_ms) < 500UL) {
     vTaskDelay(pdMS_TO_TICKS(1));
@@ -83,7 +76,6 @@ replace_between(
   return io_task_running_;
 }''')
 
-# Make repeated Wire.begin() safe on recovery by ending the previous controller instance.
 replace_once(
     'src/roller485_manager.cpp',
     'bool Roller485Manager::initializeIoOwner() {\n  Wire.begin(Config::I2C_SDA_PIN, Config::I2C_SCL_PIN);\n',
@@ -107,8 +99,6 @@ replace_between(
   publishTelemetry();
 
   for (;;) {
-    // Initialization/recovery state. Never terminate the task because one I2C
-    // attempt failed: reset to a safe requested state and retry indefinitely.
     if (!io_task_ready_) {
       requested_current_mA_ = 0;
       command_mA_ = 0;
@@ -141,8 +131,6 @@ replace_between(
     RollerCommand cmd;
     while (command_queue_ && xQueueReceive(command_queue_, &cmd, 0) == pdTRUE) {
       if (!applyCurrentMa(cmd)) {
-        // A write failure is treated as a recoverable bus/device fault. Drop
-        // pending output requests, return to initialization, and keep retrying.
         requested_current_mA_ = 0;
         if (command_queue_) xQueueReset(command_queue_);
         io_task_ready_ = false;
@@ -160,8 +148,6 @@ replace_between(
 
     update();
 
-    // Consecutive telemetry failures also enter the same automatic recovery
-    // path. This handles a temporary disconnect/brownout without a reboot.
     if (telemetry_.consecutive_errors >= Config::ROLLER_IO_RECOVERY_ERROR_LIMIT) {
       requested_current_mA_ = 0;
       if (command_queue_) xQueueReset(command_queue_);
@@ -206,7 +192,6 @@ replace_between(
   }
 }''')
 
-# Web diagnostics for automatic recovery.
 web = read('src/web_ui.cpp')
 needle = '  json += ",\\"roller_io_task_init_failed\\":" + String(roller.io_task_init_failed ? "true" : "false");\n'
 if needle in web and 'roller_io_init_attempt_count' not in web:
@@ -215,8 +200,9 @@ if needle in web and 'roller_io_init_attempt_count' not in web:
         '  json += ",\\"roller_io_recovery_count\\":" + String(roller.io_recovery_count);\n', 1)
 write('src/web_ui.cpp', web)
 
-# Guards: initialization must retry, not delete the task/fail permanently.
 guard = read('tools/test_v46i_task_split_source_guards.py')
+guard = guard.replace("'io_task_ready_', 'io_task_init_failed_', 'roller_io_task_start_timeout',\n", "'io_task_ready_', 'io_task_init_failed_',\n")
+guard = guard.replace("# Creation is not readiness: startIoTask waits for Core 0 init completion.\n", "# Creation starts a persistent Core 0 owner; readiness may arrive after retries.\n")
 guard = guard.replace("assert 'ROLLER_IO_TASK_STACK_BYTES = 6144UL' in config\n",
                       "assert 'ROLLER_IO_TASK_STACK_BYTES = 6144UL' in config\n"
                       "assert 'ROLLER_IO_RETRY_PERIOD_MS = 100UL' in config\n"
@@ -225,7 +211,7 @@ guard = guard.replace("assert 'roller_io_task_init_failed' in web\n",
                       "assert 'roller_io_task_init_failed' in web\n"
                       "assert 'roller_io_init_attempt_count' in web\n"
                       "assert 'roller_io_recovery_count' in web\n")
-guard += '''\n# Initialization/recovery must be self-healing, not one-shot.\nassert 'for (;;)' in roller_cpp\nassert 'initializeIoOwner()' in roller_cpp\nassert 'ROLLER_IO_RETRY_PERIOD_MS' in roller_cpp\nassert 'ROLLER_IO_RECOVERY_ERROR_LIMIT' in roller_cpp\nassert 'io_recovery_count_' in roller_cpp\nassert 'vTaskDelete(nullptr)' not in roller_cpp\nassert 'return io_task_running_;' in roller_cpp\n'''
+guard += '''\n# Initialization/recovery must be self-healing, not one-shot.\nassert 'for (;;)' in roller_cpp\nassert 'initializeIoOwner()' in roller_cpp\nassert 'ROLLER_IO_RETRY_PERIOD_MS' in roller_cpp\nassert 'ROLLER_IO_RECOVERY_ERROR_LIMIT' in roller_cpp\nassert 'io_recovery_count_' in roller_cpp\nassert 'vTaskDelete(nullptr)' not in roller_cpp\nassert 'roller_io_task_start_timeout' not in roller_cpp\nassert 'return io_task_running_;' in roller_cpp\n'''
 write('tools/test_v46i_task_split_source_guards.py', guard)
 
 print('V46j automatic Roller initialization/recovery patch applied')
