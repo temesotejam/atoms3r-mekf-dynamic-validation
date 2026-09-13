@@ -26,19 +26,19 @@ jobs:
       - name: Install PlatformIO
         run: pip install --upgrade platformio
 
-      - name: Validate V46g web files
+      - name: Validate V46h web files
         run: |
           test -s site/index.html
           test -s site/styles.css
           python -m json.tool site/manifest.json >/dev/null
-          grep -q "V46g MEKF Motor Validation" site/index.html
-          grep -q "v46g_mekf_400hz_predict_200hz_accel_20260913" site/index.html
-          grep -q '"version": "0.46.6"' site/manifest.json
+          grep -q "V46h MEKF Motor Validation" site/index.html
+          grep -q "v46h_mekf_400hz_web_quiet_predict_20260913" site/index.html
+          grep -q '"version": "0.46.7"' site/manifest.json
 
-      - name: Run V46g high-rate guard
+      - name: Run V46h high-rate guard
         run: python tools/test_v46g_highrate_source_guards.py
 
-      - name: Build V46g AtomS3R firmware
+      - name: Build V46h AtomS3R firmware
         run: pio run -e atoms3cam
 
       - name: Assemble Pages artifact
