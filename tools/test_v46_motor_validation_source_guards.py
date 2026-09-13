@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Static guards for the motor-driven V46c attitude-validation path."""
+"""Static guards for the motor-driven V46e attitude-validation path."""
 
 from pathlib import Path
 
@@ -25,13 +25,13 @@ def main() -> None:
     ):
         assert token in config, token
 
-    assert 'server_->on("/start-energy-control-autonomous"' in web
-    assert "runner_->startEnergyControlAutonomousCapture()" in web
-    assert "Start autonomous energy control" in web
-    assert 'server_->on("/stop"' in web
-    assert 'runner_->requestEmergencyStop("web_estop")' in web
-
+    # Web start/ESTOP and post-run recovery remain intact.
     for token in (
+        'server_->on("/start-energy-control-autonomous"',
+        "runner_->startEnergyControlAutonomousCapture()",
+        "Start autonomous energy control",
+        'server_->on("/stop"',
+        'runner_->requestEmergencyStop("web_estop")',
         "displayFrozen",
         "refreshInFlight",
         "if(lastStatus.running){displayFrozen=true;applyFrozenState();return;}",
@@ -42,15 +42,19 @@ def main() -> None:
     ):
         assert token in web, token
 
-    assert "energy_control_autonomous_pulse_live" in runner
-    assert "energy_control_autonomous_pulse_authorized_" in runner
-    assert "beginEnergyControlAutonomousStartKickPulse" in runner
-    assert "beginEnergyControlAutonomousPulse" in runner
-    assert "updateEnergyControlAutonomousPulse" in runner
-
+    # Existing V7 motor safety/authority remains the sole output path.
+    for token in (
+        "energy_control_autonomous_pulse_live",
+        "energy_control_autonomous_pulse_authorized_",
+        "beginEnergyControlAutonomousStartKickPulse",
+        "beginEnergyControlAutonomousPulse",
+        "updateEnergyControlAutonomousPulse",
+    ):
+        assert token in runner, token
     assert "if (command_mA_ == 0 && telemetry_.output_raw == 0) return true;" in roller
     assert "telemetry_.output_raw = current_mA == 0 ? 0 : 1;" in roller
 
+    # Startup 10-s guide LED and measured-upright gating are unchanged.
     for token in (
         "GUIDE_LED_ON_AFTER_BOOT_MS = 10000UL",
         "REF_AX = 0.021626f",
@@ -66,18 +70,29 @@ def main() -> None:
     assert "startup_upright_confirmed = true;" in main_cpp
     assert "digitalWrite(Config::SYNC_LED_PIN, LOW);" in main_cpp
 
-    # V46c: proper right-handed Rx(pi) sensor-to-body rotation. Raw upright is
-    # approximately -Z; body/filter upright must become +Z without the old
-    # ~180-degree Euler-roll branch. The reinit average must use the same map.
-    for token in (
-        "return {r.ax_g, -r.ay_g, -r.az_g};",
-        "mekf6::degToRad(r.gx_dps), mekf6::degToRad(-r.gy_dps), mekf6::degToRad(-r.gz_dps)",
-        "mekf6::degToRad(bx_dps), mekf6::degToRad(-by_dps), mekf6::degToRad(-bz_dps)",
-        "mean_accel_raw.x, -mean_accel_raw.y, -mean_accel_raw.z",
-        "R=diag(+1,-1,-1)",
-    ):
-        assert token in runner, token
+    # V46e proper right-handed R_y(pi)=diag(-1,+1,-1) body frame.
+    assert "R_y(pi)=diag(-1,+1,-1)" in runner
+    assert "return {-r.ax_g, r.ay_g, -r.az_g};" in runner
+    assert "mekf6::degToRad(-r.gx_dps), mekf6::degToRad(r.gy_dps), mekf6::degToRad(-r.gz_dps)" in runner
+    assert "mekf6::degToRad(-bx_dps), mekf6::degToRad(by_dps), mekf6::degToRad(-bz_dps)" in runner
+    assert "-mean_accel_raw.x, mean_accel_raw.y, -mean_accel_raw.z" in runner
 
+    # No display-only calibration may remain: absolute and control pitch both
+    # originate from the same MEKF state.
+    assert "MEKF_VIDEO_OUTPUT_SCALE" not in config
+    assert "MEKF_VIDEO_OUTPUT_SIGN" not in config
+    assert "status_.pitch_mekf_abs_deg = raw_mekf_pitch_abs_deg_;" in runner
+    assert "status_.pitch_mekf_deg = raw_mekf_pitch_abs_deg_ - offset_mekf_pitch_deg_" in runner
+
+    # With physical/video-sign pitch, return-to-centre rate is opposite peak
+    # side and physical peak side equals detector side. Zero-cross physical side
+    # remains selected from +gy rate, preserving Q/motor direction semantics.
+    assert "rate_sign == -energy_control_autonomous_candidate_detector_side_" in runner
+    assert "energy_control_autonomous_candidate_peak_ms_,\n      energy_control_autonomous_candidate_detector_side_," in runner
+    assert "event.physical_next_peak_side = rate_dps >= 0.0f ? 1 : -1;" in runner
+    assert "event.q_command_direction = event.physical_next_peak_side;" in runner
+
+    # Run-start MEKF reinitialization and accel-rejection path remain present.
     for token in (
         'status_.last_error = "upright_pose_required_before_start"',
         "g_v46_mekf_run_reinit.active = true",
@@ -92,19 +107,13 @@ def main() -> None:
         assert token in runner, token
 
     assert "const bool v46_mekf_dynamic_compare = energy_control_autonomous_mode_" in runner
-    assert "status_.pitch_mekf_deg" in runner
     assert "pitch_madgwick_dynamic_abs_deg" in runner
-    assert "MEKF_VIDEO_OUTPUT_SCALE = 0.908911f" in config
-    assert "MEKF_VIDEO_OUTPUT_SIGN = -1.0f" in config
-    assert runner.count("Config::MEKF_VIDEO_OUTPUT_SCALE * raw_mekf_pitch_abs_deg_") == 2
-    assert "status_.pitch_mekf_deg = raw_mekf_pitch_abs_deg_ - offset_mekf_pitch_deg_" in runner
-    assert "v46d_mekf_video_calibrated_rx180_upright_reinit_20260913" in config
-
-    assert "V46d MEKF motor-driven dynamic validation" in main_cpp
+    assert "v46e_mekf_ry180_physical_frame_upright_reinit_20260913" in config
+    assert "V46e MEKF motor-driven dynamic validation" in main_cpp
     assert "V7 MOTOR VALIDATION" in main_cpp
     assert "motor output OFF" not in main_cpp
 
-    print("V46c motor-driven validation source guards passed")
+    print("V46e physical-frame motor validation source guards passed")
 
 
 if __name__ == "__main__":

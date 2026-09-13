@@ -9,7 +9,7 @@ This build keeps Autonomous Energy Control V7 and the V45 actual-current audit i
 | Signal | Role | Motor/control authority |
 |---|---|---|
 | `pitch_mekf_control_deg` | Run-relative adopted angle | **Yes** |
-| `pitch_mekf_abs_deg` | Video-calibrated MEKF comparison angle (`-0.908911 * internal MEKF pitch`) | No; video comparison |
+| `pitch_mekf_abs_deg` | Continuous MEKF physical/video body-frame pitch (Ry180 sensor-to-body transform) | No; video comparison |
 | `pitch_madgwick_dynamic_abs_deg` | Continuous bias-corrected dynamic-beta hold073 Madgwick | No; comparison only |
 | `pitch_gyro_*` | Integrated gyro diagnostics | No |
 | `pitch_accel_only_deg` | `atan2` diagnostic | No |

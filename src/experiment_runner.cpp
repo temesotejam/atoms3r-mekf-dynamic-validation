@@ -46,20 +46,21 @@ mekf6::Config makeMekfConfig() {
   return cfg;
 }
 
-// V46c sensor-to-body adapter: the installed AtomS3R has raw -Z upward at the
-// measured upright pose. Rotate raw IMU vectors 180 deg about +X, R=diag(+1,-1,-1).
-// This maps upright gravity to filter +Z, keeps a right-handed frame, preserves
-// the historical static pitch coordinate, and gives d(pitch)/dt = -raw_gy.
+// V46e sensor-to-body adapter, identified from synchronized fixed-horizon
+// video plus the measured upright gravity vector. The installed AtomS3R has
+// raw upright gravity near -Z and physical/video pitch rate follows +raw_gy.
+// R_y(pi)=diag(-1,+1,-1) is the unique axis-aligned proper rotation that maps
+// upright -Z to filter +Z while preserving +raw_gy as positive body pitch rate.
 mekf6::Vec3 mekfAccelFromRaw(const ImuReading& r) {
-  return {r.ax_g, -r.ay_g, -r.az_g};
+  return {-r.ax_g, r.ay_g, -r.az_g};
 }
 
 mekf6::Vec3 mekfGyroRadFromRaw(const ImuReading& r) {
-  return {mekf6::degToRad(r.gx_dps), mekf6::degToRad(-r.gy_dps), mekf6::degToRad(-r.gz_dps)};
+  return {mekf6::degToRad(-r.gx_dps), mekf6::degToRad(r.gy_dps), mekf6::degToRad(-r.gz_dps)};
 }
 
 mekf6::Vec3 mekfStartupBiasFromRaw(float bx_dps, float by_dps, float bz_dps) {
-  return {mekf6::degToRad(bx_dps), mekf6::degToRad(-by_dps), mekf6::degToRad(-bz_dps)};
+  return {mekf6::degToRad(-bx_dps), mekf6::degToRad(by_dps), mekf6::degToRad(-bz_dps)};
 }
 }  // namespace
 
@@ -226,9 +227,9 @@ void ExperimentRunner::updateFilterSeries(const ImuReading& r) {
     status_.mekf_q_w = q.w; status_.mekf_q_x = q.x;
     status_.mekf_q_y = q.y; status_.mekf_q_z = q.z;
     const auto b = mekf_.gyroBiasRadS();
-    // Convert the MEKF kinematic-sign bias back to original raw IMU signs for logs.
+    // Convert the MEKF body-frame bias back to original raw IMU coordinates.
     status_.mekf_bias_x_dps = -mekf6::radToDeg(b.x);
-    status_.mekf_bias_y_dps = -mekf6::radToDeg(b.y);
+    status_.mekf_bias_y_dps = mekf6::radToDeg(b.y);
     status_.mekf_bias_z_dps = -mekf6::radToDeg(b.z);
     const auto d = mekf_.diagnostics();
     status_.mekf_accel_confidence = d.accel_confidence;
@@ -358,8 +359,7 @@ void ExperimentRunner::updateFilterSeries(const ImuReading& r) {
   status_.acc_norm_g = r.acc_norm_g;
   status_.imu_last_update_us = r.last_update_us;
   status_.imu_update_dt_us = r.update_dt_us;
-  status_.pitch_mekf_abs_deg = Config::MEKF_VIDEO_OUTPUT_SIGN *
-      Config::MEKF_VIDEO_OUTPUT_SCALE * raw_mekf_pitch_abs_deg_;
+  status_.pitch_mekf_abs_deg = raw_mekf_pitch_abs_deg_;
   status_.pitch_madgwick_dynamic_abs_deg = raw_dynamic_bias_pitch_deg_[Config::FILTER_ADOPTED_INDEX];
 }
 
@@ -393,8 +393,7 @@ void ExperimentRunner::updateStartupCalibration(const ImuReading& r) {
 }
 
 void ExperimentRunner::updateDisplayedAngles(const ImuReading&) {
-  status_.pitch_mekf_abs_deg = Config::MEKF_VIDEO_OUTPUT_SIGN *
-      Config::MEKF_VIDEO_OUTPUT_SCALE * raw_mekf_pitch_abs_deg_;
+  status_.pitch_mekf_abs_deg = raw_mekf_pitch_abs_deg_;
   status_.pitch_madgwick_dynamic_abs_deg = raw_dynamic_bias_pitch_deg_[Config::FILTER_ADOPTED_INDEX];
   if (passive_capture_mode_) {
     status_.pitch_mekf_deg = raw_mekf_pitch_abs_deg_;
@@ -2532,9 +2531,10 @@ void ExperimentRunner::updateEnergyControlAutonomousPeakTracker(uint32_t now_ms,
   const int8_t rate_sign = rate_dps > 0.0f ? 1 : (rate_dps < 0.0f ? -1 : 0);
   const bool returning_toward_centre = detector_abs_deg <
       energy_control_autonomous_candidate_detector_peak_abs_deg_;
-  // The adopted detector is empirically opposite in sign to +gy. At a
-  // detector-side extremum, return-to-centre +gy has detector-side sign.
-  const bool rate_confirms_return = rate_sign == energy_control_autonomous_candidate_detector_side_;
+  // V46e detector pitch uses the physical/video sign and therefore agrees with
+  // +gy during outward motion. On return to centre, the rate sign is opposite
+  // the detector/physical peak side.
+  const bool rate_confirms_return = rate_sign == -energy_control_autonomous_candidate_detector_side_;
   if (!returning_toward_centre || !rate_confirms_return) {
     energy_control_autonomous_return_samples_ = 0;
     return;
@@ -2546,7 +2546,7 @@ void ExperimentRunner::updateEnergyControlAutonomousPeakTracker(uint32_t now_ms,
       energy_control_autonomous_candidate_detector_peak_abs_deg_;
   const bool accepted = recordEnergyControlAutonomousPeak(
       energy_control_autonomous_candidate_peak_ms_,
-      -energy_control_autonomous_candidate_detector_side_,
+      energy_control_autonomous_candidate_detector_side_,
       energy_control_autonomous_candidate_peak_amplitude_deg_, detector_peak_angle_deg);
   if (!accepted) resetEnergyControlAutonomousPeakTracker(true);
 }
@@ -2873,7 +2873,7 @@ void ExperimentRunner::updateStartSync(uint32_t now_ms) {
           static_cast<float>(g_v46_mekf_run_reinit.ay_sum_g / n),
           static_cast<float>(g_v46_mekf_run_reinit.az_sum_g / n)};
       const mekf6::Vec3 mean_accel{
-          mean_accel_raw.x, -mean_accel_raw.y, -mean_accel_raw.z};
+          -mean_accel_raw.x, mean_accel_raw.y, -mean_accel_raw.z};
 
       mekf_.reset();
       mekf_.setConfig(makeMekfConfig());

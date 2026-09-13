@@ -52,7 +52,7 @@ struct ExperimentStatus {
   float gyro_bias_pitch_dps = 0.0f;
   // V46 adopted attitude and online comparison diagnostics.
   float pitch_mekf_deg = 0.0f;              // run-relative control/detector angle when applicable
-  float pitch_mekf_abs_deg = 0.0f;          // video-calibrated MEKF comparison coordinate; control is unchanged
+  float pitch_mekf_abs_deg = 0.0f;          // continuous MEKF physical/video body-frame pitch coordinate
   float pitch_madgwick_dynamic_abs_deg = 0.0f;
   float mekf_q_w = 1.0f;
   float mekf_q_x = 0.0f;
