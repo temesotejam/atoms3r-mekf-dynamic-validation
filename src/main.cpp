@@ -30,17 +30,18 @@ void setup() {
   Serial.begin(Config::SERIAL_BAUD);
   delay(300);
   Serial.println();
-  Serial.println("AtomS3CAM E2 Q shadow passive logger");
+  Serial.println("AtomS3R V46 MEKF dynamic validation");
 
   auto cfg = M5.config();
   cfg.serial_baudrate = 0;
   cfg.internal_imu = true;
   M5.begin(cfg);
-  Serial.printf("E2 Q shadow identity: board=%d imu_type=%d M5Unified=%s M5GFX=%s AHRS=%s base=%s\\n",
+  Serial.printf("V46 identity: board=%d imu_type=%d M5Unified=%s M5GFX=%s AHRS=%s base=%s attitude=%s\n",
                 static_cast<int>(M5.getBoard()), static_cast<int>(M5.Imu.getType()),
                 Config::RESOLVED_M5UNIFIED_VERSION, Config::RESOLVED_M5GFX_VERSION,
-                Config::RESOLVED_ADAFRUIT_AHRS_VERSION, Config::V62_BASE_COMMIT);
-  displayLine("E2 Q SHADOW", "motor output OFF");
+                Config::RESOLVED_ADAFRUIT_AHRS_VERSION, Config::V62_BASE_COMMIT,
+                Config::ATTITUDE_VALIDATION_REVISION);
+  displayLine("V46 MEKF", "PASSIVE FIRST");
 
   const bool psram_ok = logger.begin();
   Serial.printf("PSRAM: %s total=%u free=%u sample_capacity=%u\n", psram_ok ? "OK" : "FAILED",
