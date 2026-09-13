@@ -2,7 +2,21 @@
 
 #include <math.h>
 
+#include "upright_pose_guide.h"
+
 namespace {
+struct V46MekfRunReinitAccumulator {
+  bool active = false;
+  bool done = false;
+  uint32_t last_imu_update_us = 0;
+  uint32_t stable_sample_count = 0;
+  double ax_sum_g = 0.0;
+  double ay_sum_g = 0.0;
+  double az_sum_g = 0.0;
+};
+
+V46MekfRunReinitAccumulator g_v46_mekf_run_reinit;
+
 bool isSelectableZeroCrossCurrent(int16_t current_mA) {
   return current_mA >= Config::ZERO_CROSS_CURRENT_MIN_MA &&
          current_mA <= Config::ZERO_CROSS_CURRENT_MAX_MA;
@@ -811,6 +825,13 @@ bool ExperimentRunner::startEnergyControlAutonomousCapture() {
   energy_control_autonomous_mode_ = false;
   energy_control_autonomous_pulse_authorized_ = false;
   energy_control_v0_pulse_authorized_ = false;
+  const ImuReading& autonomous_start_reading = imu_->reading();
+  if (!UprightPoseGuide::isUprightStableSample(autonomous_start_reading)) {
+    status_.last_error = "upright_pose_required_before_start";
+    return false;
+  }
+  g_v46_mekf_run_reinit = V46MekfRunReinitAccumulator{};
+  g_v46_mekf_run_reinit.active = true;
   energy_control_autonomous_mode_ = true;
   energy_control_autonomous_pulse_authorized_ = false;
   // V46 records only the adopted hold-073 dynamic-beta Madgwick alongside MEKF.
@@ -2813,6 +2834,84 @@ void ExperimentRunner::updateMidSyncLed(uint32_t now_ms) {
 
 void ExperimentRunner::updateStartSync(uint32_t now_ms) {
   stopMotor();
+
+  // V46 hardware workflow intentionally powers up while the mechanism is lying
+  // down. For Autonomous V7, rebuild the MEKF gravity attitude from a stable
+  // upright average during the first OFF segment of the unchanged START sync
+  // pattern. Startup gyro bias is preserved and re-applied.
+  if (energy_control_autonomous_mode_ && g_v46_mekf_run_reinit.active &&
+      !g_v46_mekf_run_reinit.done && sync_step_ == 0) {
+    const ImuReading& r = imu_->reading();
+    if (r.last_update_us != 0 &&
+        r.last_update_us != g_v46_mekf_run_reinit.last_imu_update_us) {
+      g_v46_mekf_run_reinit.last_imu_update_us = r.last_update_us;
+      if (UprightPoseGuide::isUprightStableSample(r)) {
+        g_v46_mekf_run_reinit.ax_sum_g += r.ax_g;
+        g_v46_mekf_run_reinit.ay_sum_g += r.ay_g;
+        g_v46_mekf_run_reinit.az_sum_g += r.az_g;
+        ++g_v46_mekf_run_reinit.stable_sample_count;
+      } else {
+        // Require a contiguous stable window. A hand movement while START_SYNC
+        // is beginning restarts the average instead of contaminating it.
+        g_v46_mekf_run_reinit.stable_sample_count = 0;
+        g_v46_mekf_run_reinit.ax_sum_g = 0.0;
+        g_v46_mekf_run_reinit.ay_sum_g = 0.0;
+        g_v46_mekf_run_reinit.az_sum_g = 0.0;
+      }
+    }
+
+    if (static_cast<uint32_t>(now_ms - sync_step_start_ms_) >=
+        UprightPoseGuide::MEKF_REINIT_AVERAGE_MS) {
+      const uint32_t n = g_v46_mekf_run_reinit.stable_sample_count;
+      if (n < UprightPoseGuide::MEKF_REINIT_MIN_SAMPLES) {
+        g_v46_mekf_run_reinit.active = false;
+        requestEmergencyStop("mekf_reinit_upright_not_stable");
+        return;
+      }
+
+      const mekf6::Vec3 mean_accel{
+          static_cast<float>(g_v46_mekf_run_reinit.ax_sum_g / n),
+          static_cast<float>(g_v46_mekf_run_reinit.ay_sum_g / n),
+          static_cast<float>(g_v46_mekf_run_reinit.az_sum_g / n)};
+
+      mekf_.reset();
+      mekf_.setConfig(makeMekfConfig());
+      mekf_initialized_ = mekf_.initializeFromAccel(mean_accel);
+      if (mekf_initialized_ && bias_ready_) {
+        mekf_.setGyroBiasRadS(mekfStartupBiasFromRaw(
+            status_.gyro_bias_x_dps, status_.gyro_bias_y_dps, status_.gyro_bias_z_dps));
+      }
+      if (!mekf_initialized_) {
+        g_v46_mekf_run_reinit.active = false;
+        requestEmergencyStop("mekf_reinit_failed");
+        return;
+      }
+
+      // Prime diagnostics with the same averaged gravity sample. Subsequent
+      // 5-ms IMU updates continue normal adaptive accel correction for the
+      // remaining START sync time before any motor command is authorized.
+      mekf_.updateAccel(mean_accel);
+      const auto e = mekf_.eulerDeg();
+      raw_mekf_pitch_abs_deg_ = e.pitch;
+      const auto q = mekf_.quaternion();
+      status_.mekf_q_w = q.w;
+      status_.mekf_q_x = q.x;
+      status_.mekf_q_y = q.y;
+      status_.mekf_q_z = q.z;
+      const auto d = mekf_.diagnostics();
+      status_.mekf_accel_confidence = d.accel_confidence;
+      status_.mekf_accel_residual_deg = d.accel_direction_residual_deg;
+      status_.mekf_accel_mag_error_g = d.accel_magnitude_error_g;
+      status_.mekf_accel_used = d.accel_used;
+
+      g_v46_mekf_run_reinit.done = true;
+      g_v46_mekf_run_reinit.active = false;
+      Serial.printf("MEKF run reinit: n=%u mean=(%.5f,%.5f,%.5f) pitch=%.3f conf=%.3f resid=%.3f\n",
+                    static_cast<unsigned>(n), mean_accel.x, mean_accel.y, mean_accel.z,
+                    raw_mekf_pitch_abs_deg_, status_.mekf_accel_confidence,
+                    status_.mekf_accel_residual_deg);
+    }
+  }
   if (updateSyncPattern(now_ms, Config::START_SYNC_PATTERN, Config::START_SYNC_PATTERN_STEP_COUNT)) {
     setSyncLed(false);
     beginMeasurementRun();
