@@ -20,6 +20,22 @@ int main() {
   assert(f.initializeFromAccel(a));
   if (std::fabs(reportedPitch(f) - 10.0f) > 0.05f) return 1;
 
+  // 1b) Regression for the actual upright installation measured in
+  // 20260913_122233_294_501c. Upright gravity is almost -Z, not +Z. A run-time
+  // reset/re-initialization from this vector must immediately make accel usable.
+  f.reset();
+  const auto measured_upright = accelFilter(0.021626f, 0.033568f, -0.999202f);
+  if (!f.initializeFromAccel(measured_upright)) return 9;
+  if (!f.predict(gyroFilter(0, 0, 0), 0.005f)) return 10;
+  const bool upright_used = f.updateAccel(measured_upright);
+  const auto upright_diag = f.diagnostics();
+  std::printf("measured_upright pitch=%.3f used=%d conf=%.3f resid=%.3f\n",
+              reportedPitch(f), upright_used ? 1 : 0,
+              upright_diag.accel_confidence, upright_diag.accel_direction_residual_deg);
+  if (!upright_used || !upright_diag.accel_used) return 11;
+  if (upright_diag.accel_confidence < 0.99f ||
+      upright_diag.accel_direction_residual_deg > 0.1f) return 12;
+
   // 2) Dynamic sign must match pitch_rate=-gy. raw gy=-90 dps for 100 ms
   // therefore advances the detector coordinate by +9 deg.
   f.reset();
