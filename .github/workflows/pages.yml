@@ -2,7 +2,7 @@ name: pages
 
 on:
   push:
-    branches: ["feature/v46-mekf-dynamic-validation"]
+    branches: [main, "feature/v46-mekf-dynamic-validation"]
   workflow_dispatch:
 
 permissions:
