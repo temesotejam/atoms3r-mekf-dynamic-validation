@@ -12,6 +12,8 @@ assert 'v46j_mekf_dual_core_roller_ready_20260913' in config
 assert 'ROLLER_IO_TASK_CORE = 0' in config
 assert 'ROLLER_IO_TASK_PRIORITY = 4' in config
 assert 'ROLLER_IO_TASK_STACK_BYTES = 6144UL' in config
+assert 'ROLLER_IO_RETRY_PERIOD_MS = 100UL' in config
+assert 'ROLLER_IO_RECOVERY_ERROR_LIMIT = 3' in config
 assert 'AtomS3R V46j MEKF dual-core motor validation' in main
 assert 'roller.startIoTask(' in main
 assert 'roller.stop();' not in main
@@ -29,9 +31,9 @@ stop_region = roller_cpp[roller_cpp.index('bool Roller485Manager::stop()'):rolle
 assert 'Wire.' not in stop_region
 assert 'No synchronous Wire fallback' in stop_region
 
-# Creation is not readiness: startIoTask waits for Core 0 init completion.
+# Creation starts a persistent Core 0 owner; readiness may arrive after retries.
 for token in (
-    'io_task_ready_', 'io_task_init_failed_', 'roller_io_task_start_timeout',
+    'io_task_ready_', 'io_task_init_failed_',
     'roller_io_task_not_ready', 'initializeIoOwner()', 'vTaskDelay(pdMS_TO_TICKS(1))',
     'xTaskCreatePinnedToCore', 'xQueueCreate(4, sizeof(RollerCommand))',
     'xQueueSend(command_queue_', 'xQueueReset(command_queue_)',
@@ -47,7 +49,19 @@ assert runner.count('telemetrySnapshot()') >= 2
 assert 'roller_io_task_running' in web
 assert 'roller_io_task_ready' in web
 assert 'roller_io_task_init_failed' in web
+assert 'roller_io_init_attempt_count' in web
+assert 'roller_io_recovery_count' in web
 assert 'roller_command_latency_max_us' in web
 assert 'AtomS3R V46j MEKF Motor Validation' in manifest
 assert '"version": "0.46.9"' in manifest
 print('V46j dual-core Roller READY guards passed')
+
+# Initialization/recovery must be self-healing, not one-shot.
+assert 'for (;;)' in roller_cpp
+assert 'initializeIoOwner()' in roller_cpp
+assert 'ROLLER_IO_RETRY_PERIOD_MS' in roller_cpp
+assert 'ROLLER_IO_RECOVERY_ERROR_LIMIT' in roller_cpp
+assert 'io_recovery_count_' in roller_cpp
+assert 'vTaskDelete(nullptr)' not in roller_cpp
+assert 'roller_io_task_start_timeout' not in roller_cpp
+assert 'return io_task_running_;' in roller_cpp

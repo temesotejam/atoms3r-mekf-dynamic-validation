@@ -28,7 +28,7 @@ bool Roller485Manager::begin() {
 }
 
 bool Roller485Manager::startIoTask(uint8_t core_id, uint8_t priority, uint32_t stack_bytes) {
-  if (io_task_ready_) return true;
+  if (io_task_running_) return true;
   if (command_queue_ == nullptr) {
     command_queue_ = xQueueCreate(4, sizeof(RollerCommand));
     if (command_queue_ == nullptr) {
@@ -48,18 +48,11 @@ bool Roller485Manager::startIoTask(uint8_t core_id, uint8_t priority, uint32_t s
     return false;
   }
 
-  // Do not report task success until Core 0 has initialized Wire, found the
-  // Roller, forced zero output, and completed one telemetry snapshot.
   const uint32_t start_ms = millis();
-  while (!io_task_ready_ && !io_task_init_failed_ &&
-         static_cast<uint32_t>(millis() - start_ms) < 1000UL) {
+  while (!io_task_running_ && static_cast<uint32_t>(millis() - start_ms) < 500UL) {
     vTaskDelay(pdMS_TO_TICKS(1));
   }
-  if (!io_task_ready_) {
-    if (!io_task_init_failed_) last_error_ = "roller_io_task_start_timeout";
-    return false;
-  }
-  return true;
+  return io_task_running_;
 }
 
 void Roller485Manager::ioTaskEntry(void* arg) {
@@ -67,6 +60,9 @@ void Roller485Manager::ioTaskEntry(void* arg) {
 }
 
 bool Roller485Manager::initializeIoOwner() {
+  // Recovery always starts from a clean bus controller state, on Core 0.
+  Wire.end();
+  vTaskDelay(pdMS_TO_TICKS(2));
   Wire.begin(Config::I2C_SDA_PIN, Config::I2C_SCL_PIN);
   Wire.setClock(Config::I2C_HZ);
   Wire.setTimeOut(Config::I2C_TIMEOUT_MS);
@@ -109,52 +105,100 @@ bool Roller485Manager::initializeIoOwner() {
 
 void Roller485Manager::ioTaskLoop() {
   io_task_running_ = true;
+  io_task_ready_ = false;
+  io_task_init_failed_ = false;
   telemetry_.io_task_running = true;
   telemetry_.io_task_ready = false;
   telemetry_.io_task_init_failed = false;
   publishTelemetry();
 
-  if (!initializeIoOwner()) {
-    io_task_init_failed_ = true;
-    io_task_ready_ = false;
-    telemetry_.io_task_running = false;
-    telemetry_.io_task_ready = false;
-    telemetry_.io_task_init_failed = true;
-    publishTelemetry();
-    vTaskDelete(nullptr);
-    return;
-  }
-
-  io_task_ready_ = true;
-  telemetry_.io_task_ready = true;
-  publishTelemetry();
-
   for (;;) {
+    if (!io_task_ready_) {
+      requested_current_mA_ = 0;
+      command_mA_ = 0;
+      if (command_queue_) xQueueReset(command_queue_);
+      ++io_init_attempt_count_;
+      telemetry_.io_init_attempt_count = io_init_attempt_count_;
+      telemetry_.io_recovery_count = io_recovery_count_;
+      telemetry_.io_task_running = true;
+      telemetry_.io_task_ready = false;
+
+      if (initializeIoOwner()) {
+        io_task_ready_ = true;
+        io_task_init_failed_ = false;
+        telemetry_.io_task_ready = true;
+        telemetry_.io_task_init_failed = false;
+        telemetry_.io_init_attempt_count = io_init_attempt_count_;
+        telemetry_.io_recovery_count = io_recovery_count_;
+        publishTelemetry();
+      } else {
+        io_task_init_failed_ = true;
+        telemetry_.io_task_init_failed = true;
+        telemetry_.io_task_ready = false;
+        telemetry_.roller_ok = false;
+        publishTelemetry();
+        vTaskDelay(pdMS_TO_TICKS(Config::ROLLER_IO_RETRY_PERIOD_MS));
+        continue;
+      }
+    }
+
     RollerCommand cmd;
     while (command_queue_ && xQueueReceive(command_queue_, &cmd, 0) == pdTRUE) {
       if (!applyCurrentMa(cmd)) {
         requested_current_mA_ = 0;
-        RollerCommand zero;
-        zero.current_mA = 0;
-        zero.requested_us = micros();
-        zero.sequence = ++command_sequence_;
-        applyCurrentMa(zero);
+        if (command_queue_) xQueueReset(command_queue_);
+        io_task_ready_ = false;
+        io_task_init_failed_ = true;
+        ++io_recovery_count_;
+        telemetry_.io_recovery_count = io_recovery_count_;
+        telemetry_.io_task_ready = false;
+        telemetry_.io_task_init_failed = true;
+        telemetry_.roller_ok = false;
+        publishTelemetry();
+        break;
       }
     }
+    if (!io_task_ready_) continue;
 
     update();
+
+    if (telemetry_.consecutive_errors >= Config::ROLLER_IO_RECOVERY_ERROR_LIMIT) {
+      requested_current_mA_ = 0;
+      if (command_queue_) xQueueReset(command_queue_);
+      io_task_ready_ = false;
+      io_task_init_failed_ = true;
+      ++io_recovery_count_;
+      telemetry_.io_recovery_count = io_recovery_count_;
+      telemetry_.io_task_ready = false;
+      telemetry_.io_task_init_failed = true;
+      telemetry_.roller_ok = false;
+      publishTelemetry();
+      continue;
+    }
 
     if (requested_current_mA_ == 0 && (command_mA_ != 0 || telemetry_.output_raw != 0)) {
       RollerCommand zero;
       zero.current_mA = 0;
       zero.requested_us = micros();
       zero.sequence = ++command_sequence_;
-      applyCurrentMa(zero);
+      if (!applyCurrentMa(zero)) {
+        io_task_ready_ = false;
+        io_task_init_failed_ = true;
+        ++io_recovery_count_;
+        telemetry_.io_recovery_count = io_recovery_count_;
+        telemetry_.io_task_ready = false;
+        telemetry_.io_task_init_failed = true;
+        telemetry_.roller_ok = false;
+        publishTelemetry();
+        continue;
+      }
     }
 
     telemetry_.io_task_running = true;
     telemetry_.io_task_ready = true;
     telemetry_.io_task_init_failed = false;
+    telemetry_.io_init_attempt_count = io_init_attempt_count_;
+    telemetry_.io_recovery_count = io_recovery_count_;
     telemetry_.requested_current_mA = requested_current_mA_;
     telemetry_.applied_current_mA = command_mA_;
     publishTelemetry();

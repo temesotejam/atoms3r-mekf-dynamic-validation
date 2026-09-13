@@ -355,6 +355,8 @@ String WebUi::statusJson() const {
   json += ",\"roller_io_task_running\":" + String(roller.io_task_running ? "true" : "false");
   json += ",\"roller_io_task_ready\":" + String(roller.io_task_ready ? "true" : "false");
   json += ",\"roller_io_task_init_failed\":" + String(roller.io_task_init_failed ? "true" : "false");
+  json += ",\"roller_io_init_attempt_count\":" + String(roller.io_init_attempt_count);
+  json += ",\"roller_io_recovery_count\":" + String(roller.io_recovery_count);
   json += ",\"roller_command_latency_us\":" + String(roller.last_command_latency_us);
   json += ",\"roller_command_latency_max_us\":" + String(roller.max_command_latency_us);
   json += ",\"battery_mV\":" + String(roller.battery_mV);

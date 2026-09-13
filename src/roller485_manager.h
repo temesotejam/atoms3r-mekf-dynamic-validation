@@ -27,7 +27,9 @@ struct RollerTelemetry {
   // V46j task-split diagnostics. These are status-only and do not alter RWLOG v46.
   bool io_task_running = false;
   bool io_task_ready = false;
-  bool io_task_init_failed = false;
+  bool io_task_init_failed = false;  // last attempt failed; task is still retrying
+  uint32_t io_init_attempt_count = 0;
+  uint32_t io_recovery_count = 0;
   int16_t requested_current_mA = 0;
   int16_t applied_current_mA = 0;
   uint32_t last_command_latency_us = 0;
@@ -89,6 +91,8 @@ private:
   volatile bool io_task_ready_ = false;
   volatile bool io_task_init_failed_ = false;
   volatile int16_t requested_current_mA_ = 0;
+  uint32_t io_init_attempt_count_ = 0;
+  uint32_t io_recovery_count_ = 0;
   uint32_t command_sequence_ = 0;
 
   uint32_t last_read_due_us_ = 0;

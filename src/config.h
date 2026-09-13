@@ -91,6 +91,8 @@ static constexpr uint32_t MEKF_CONTROL_PREDICTION_MAX_US = 10000UL;
 static constexpr uint8_t ROLLER_IO_TASK_CORE = 0;
 static constexpr uint8_t ROLLER_IO_TASK_PRIORITY = 4;
 static constexpr uint32_t ROLLER_IO_TASK_STACK_BYTES = 6144UL;
+static constexpr uint32_t ROLLER_IO_RETRY_PERIOD_MS = 100UL;
+static constexpr uint8_t ROLLER_IO_RECOVERY_ERROR_LIMIT = 3;
 static constexpr uint16_t LOG_PERIOD_MS = 20;
 static constexpr uint16_t ROLLER_READ_PERIOD_MS = 20;
 // Actual-current audit only. While a motor command is active, CURRENT_READBACK
