@@ -13,6 +13,7 @@ def main() -> None:
     web = (SRC / "web_ui.cpp").read_text(encoding="utf-8")
     roller = (SRC / "roller485_manager.cpp").read_text(encoding="utf-8")
     main_cpp = (SRC / "main.cpp").read_text(encoding="utf-8")
+    upright = (SRC / "upright_pose_guide.h").read_text(encoding="utf-8")
 
     # Frozen V7 motor experiment shape.
     for token in (
@@ -59,6 +60,42 @@ def main() -> None:
     # later reports OUTPUT=1, the same stop() path writes zero again.
     assert "if (command_mA_ == 0 && telemetry_.output_raw == 0) return true;" in roller
     assert "telemetry_.output_raw = current_mA == 0 ? 0 : 1;" in roller
+
+    # Hardware workflow: lying-down power-up is intentional. At 10 s the same
+    # LED used for video synchronization becomes a pre-run upright prompt. Once
+    # the measured upright gravity direction is stable it goes dark. The guide
+    # must stop touching the LED as soon as any measurement state is running.
+    for token in (
+        "GUIDE_LED_ON_AFTER_BOOT_MS = 10000UL",
+        "REF_AX = 0.021626f",
+        "REF_AY = 0.033568f",
+        "REF_AZ = -0.999202f",
+        "UPRIGHT_STABLE_HOLD_MS = 400UL",
+        "MEKF_REINIT_AVERAGE_MS = 800UL",
+        "MEKF_REINIT_MIN_SAMPLES = 60UL",
+    ):
+        assert token in upright, token
+    assert "if (startup_upright_confirmed || runner.running()) return;" in main_cpp
+    assert "digitalWrite(Config::SYNC_LED_PIN, HIGH);" in main_cpp
+    assert "startup_upright_confirmed = true;" in main_cpp
+    assert "digitalWrite(Config::SYNC_LED_PIN, LOW);" in main_cpp
+
+    # Autonomous start is allowed only from the measured upright pose. During
+    # the unchanged first OFF step of START_SYNC, stable samples are averaged,
+    # MEKF is reset/reinitialized from gravity, and the startup gyro bias is
+    # re-applied before any motor pulse can be authorized.
+    for token in (
+        'status_.last_error = "upright_pose_required_before_start"',
+        "g_v46_mekf_run_reinit.active = true",
+        "sync_step_ == 0",
+        "UprightPoseGuide::MEKF_REINIT_AVERAGE_MS",
+        "mekf_.reset();",
+        "mekf_.initializeFromAccel(mean_accel)",
+        "mekf_.setGyroBiasRadS(mekfStartupBiasFromRaw(",
+        'requestEmergencyStop("mekf_reinit_upright_not_stable")',
+        'Serial.printf("MEKF run reinit:',
+    ):
+        assert token in runner, token
 
     # MEKF is the adopted controller/detector attitude; dynamic-beta Madgwick is
     # retained only as synchronized comparison data during autonomous capture.
