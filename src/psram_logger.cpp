@@ -471,7 +471,9 @@ String PsramLogger::buildMetadataJson() const {
   json += "\"angle_reference_policy\":\"imu_gravity_frame_continuous_without_per_run_zero_subtraction;video_must_use_body_line_minus_fixed_horizon\",";
   json += "\"attitude_filter_adopted\":\"MEKF_6state_error_state\",";
   json += "\"attitude_filter_compare\":\"online_dynamic_beta_madgwick_hold073_only_for_post_run_comparison\",";
-  json += "\"mekf_coordinate_mapping\":\"accel=raw_IMU_xyz;gyro_for_predict=-raw_gyro_xyz;reported_pitch=MEKF_pitch;preserves_V45_static_atan2_minus_ax_and_dynamic_minus_gy_detector_sign\",";
+  json += "\"mekf_coordinate_mapping\":\"Ry180_body_frame:accel=(-ax,+ay,-az);gyro=(-gx,+gy_scaled,-gz);reported_pitch=physical_video_sign\",";
+  json += "\"mekf_gyro_y_scale\":" + String(Config::MEKF_GYRO_Y_SCALE, 6) + ",";
+  json += "\"mekf_gyro_y_scale_role\":\"pre_prediction_sensor_calibration_not_output_angle_scaling\",";
   json += "\"mekf_control_angle_reference\":\"measurement_start_zero_subtracted;used_by_autonomous_control_zero_cross_and_peak_detection\",";
   json += "\"mekf_abs_angle_reference\":\"continuous_gravity_frame_no_per_run_zero_subtraction;preferred_for_video_comparison\",";
   json += "\"madgwick_dynamic_abs_reference\":\"continuous_bias_corrected_dynamic_hold073_filter;online_comparison_only\",";

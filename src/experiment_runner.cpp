@@ -46,21 +46,23 @@ mekf6::Config makeMekfConfig() {
   return cfg;
 }
 
-// V46e sensor-to-body adapter, identified from synchronized fixed-horizon
-// video plus the measured upright gravity vector. The installed AtomS3R has
-// raw upright gravity near -Z and physical/video pitch rate follows +raw_gy.
-// R_y(pi)=diag(-1,+1,-1) is the unique axis-aligned proper rotation that maps
-// upright -Z to filter +Z while preserving +raw_gy as positive body pitch rate.
+// V46f sensor-to-body adapter. Ry(pi) gives the physical/video body frame.
+// The Y gyro sensitivity is additionally calibrated before MEKF prediction;
+// this is an input-model correction, not a post-estimator angle scale.
 mekf6::Vec3 mekfAccelFromRaw(const ImuReading& r) {
   return {-r.ax_g, r.ay_g, -r.az_g};
 }
 
 mekf6::Vec3 mekfGyroRadFromRaw(const ImuReading& r) {
-  return {mekf6::degToRad(-r.gx_dps), mekf6::degToRad(r.gy_dps), mekf6::degToRad(-r.gz_dps)};
+  return {mekf6::degToRad(-r.gx_dps),
+          mekf6::degToRad(r.gy_dps * Config::MEKF_GYRO_Y_SCALE),
+          mekf6::degToRad(-r.gz_dps)};
 }
 
 mekf6::Vec3 mekfStartupBiasFromRaw(float bx_dps, float by_dps, float bz_dps) {
-  return {mekf6::degToRad(-bx_dps), mekf6::degToRad(by_dps), mekf6::degToRad(-bz_dps)};
+  return {mekf6::degToRad(-bx_dps),
+          mekf6::degToRad(by_dps * Config::MEKF_GYRO_Y_SCALE),
+          mekf6::degToRad(-bz_dps)};
 }
 }  // namespace
 
@@ -229,7 +231,7 @@ void ExperimentRunner::updateFilterSeries(const ImuReading& r) {
     const auto b = mekf_.gyroBiasRadS();
     // Convert the MEKF body-frame bias back to original raw IMU coordinates.
     status_.mekf_bias_x_dps = -mekf6::radToDeg(b.x);
-    status_.mekf_bias_y_dps = mekf6::radToDeg(b.y);
+    status_.mekf_bias_y_dps = mekf6::radToDeg(b.y) / Config::MEKF_GYRO_Y_SCALE;
     status_.mekf_bias_z_dps = -mekf6::radToDeg(b.z);
     const auto d = mekf_.diagnostics();
     status_.mekf_accel_confidence = d.accel_confidence;

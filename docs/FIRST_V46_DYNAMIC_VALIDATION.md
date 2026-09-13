@@ -72,7 +72,7 @@ Use `converted_run/timeseries.csv` for the estimator comparison.
 
 Use these continuous absolute-angle signals against video ground truth:
 
-- `pitch_mekf_abs_deg` (V46e: physical/video body-frame MEKF pitch; no post-output scaling)
+- `pitch_mekf_abs_deg` (V46f: physical/video body-frame MEKF pitch; no post-output scaling)
 - `pitch_madgwick_dynamic_abs_deg`
 
 Do not use `pitch_mekf_control_deg` as the video ground-truth coordinate; it is the run-relative angle used by control.

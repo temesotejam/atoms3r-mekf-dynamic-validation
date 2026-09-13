@@ -71,10 +71,9 @@ def main() -> None:
     assert "digitalWrite(Config::SYNC_LED_PIN, LOW);" in main_cpp
 
     # V46e proper right-handed R_y(pi)=diag(-1,+1,-1) body frame.
-    assert "R_y(pi)=diag(-1,+1,-1)" in runner
     assert "return {-r.ax_g, r.ay_g, -r.az_g};" in runner
-    assert "mekf6::degToRad(-r.gx_dps), mekf6::degToRad(r.gy_dps), mekf6::degToRad(-r.gz_dps)" in runner
-    assert "mekf6::degToRad(-bx_dps), mekf6::degToRad(by_dps), mekf6::degToRad(-bz_dps)" in runner
+    assert "r.gy_dps * Config::MEKF_GYRO_Y_SCALE" in runner
+    assert "by_dps * Config::MEKF_GYRO_Y_SCALE" in runner
     assert "-mean_accel_raw.x, mean_accel_raw.y, -mean_accel_raw.z" in runner
 
     # No display-only calibration may remain: absolute and control pitch both
@@ -83,6 +82,10 @@ def main() -> None:
     assert "MEKF_VIDEO_OUTPUT_SIGN" not in config
     assert "status_.pitch_mekf_abs_deg = raw_mekf_pitch_abs_deg_;" in runner
     assert "status_.pitch_mekf_deg = raw_mekf_pitch_abs_deg_ - offset_mekf_pitch_deg_" in runner
+    assert "MEKF_GYRO_Y_SCALE = 0.908911f" in config
+    assert "r.gy_dps * Config::MEKF_GYRO_Y_SCALE" in runner
+    assert "by_dps * Config::MEKF_GYRO_Y_SCALE" in runner
+    assert "mekf_bias_y_dps = mekf6::radToDeg(b.y) / Config::MEKF_GYRO_Y_SCALE" in runner
 
     # With physical/video-sign pitch, return-to-centre rate is opposite peak
     # side and physical peak side equals detector side. Zero-cross physical side
@@ -108,8 +111,8 @@ def main() -> None:
 
     assert "const bool v46_mekf_dynamic_compare = energy_control_autonomous_mode_" in runner
     assert "pitch_madgwick_dynamic_abs_deg" in runner
-    assert "v46e_mekf_ry180_physical_frame_upright_reinit_20260913" in config
-    assert "V46e MEKF motor-driven dynamic validation" in main_cpp
+    assert "v46f_mekf_ry180_gyro_y_calibrated_upright_reinit_20260913" in config
+    assert "V46f MEKF motor-driven dynamic validation" in main_cpp
     assert "V7 MOTOR VALIDATION" in main_cpp
     assert "motor output OFF" not in main_cpp
 

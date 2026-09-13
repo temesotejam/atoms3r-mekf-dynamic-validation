@@ -4,24 +4,24 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#111827">
-  <title>AtomS3R V46e MEKF Motor Validation</title>
+  <title>AtomS3R V46f MEKF Motor Validation</title>
   <link rel="stylesheet" href="styles.css">
   <script type="module" src="https://unpkg.com/esp-web-tools@10.1.1/dist/web/install-button.js?module"></script>
 </head>
 <body>
   <main class="shell">
     <header class="hero">
-      <p class="eyebrow">ATOMS3R / V46e / MOTOR-DRIVEN VALIDATION</p>
+      <p class="eyebrow">ATOMS3R / V46f / MOTOR-DRIVEN VALIDATION</p>
       <h1>MEKF Motor Validation<br><span>Web Flasher</span></h1>
-      <p class="lead">Autonomous Energy Control V7 を実際にモータ駆動しながら、MEKF と dynamic-beta Madgwick を同時記録する V46e ファームウェアです。MEKFのIMU→機体座標を実測重力方向と動画角速度に基づくRy(180°)へ修正し、推定状態そのものを固定ホライズン動画と同じ物理Pitch符号にしています。V46b実機データから確認したAtomS3Rの取付方向を反映し、MEKF入力をX軸まわり180°回転した正しい右手系の機体座標へ変換します。</p>
-      <div class="badges"><span>ESP32-S3</span><span>RWLOG v46</span><span>V46e Rx180</span><span>upright reinit</span><span>Madgwick compare</span></div>
+      <p class="lead">Autonomous Energy Control V7 を実際にモータ駆動しながら、MEKF と dynamic-beta Madgwick を同時記録する V46f ファームウェアです。MEKFのIMU→機体座標を実測重力方向と動画角速度に基づくRy(180°)へ修正し、推定状態そのものを固定ホライズン動画と同じ物理Pitch符号にしています。V46b実機データから確認したAtomS3Rの取付方向を反映し、MEKF入力をX軸まわり180°回転した正しい右手系の機体座標へ変換します。</p>
+      <div class="badges"><span>ESP32-S3</span><span>RWLOG v46</span><span>V46f Rx180</span><span>upright reinit</span><span>Madgwick compare</span></div>
     </header>
 
     <section class="panel important">
       <h2>このページから直接書き込めます</h2>
       <p>AtomS3R を USB でPCへ接続し、Chrome または Edge のデスクトップ版で下のボタンを押してください。</p>
       <esp-web-install-button manifest="manifest.json">
-        <button slot="activate" class="primary">AtomS3RへV46eを書き込む</button>
+        <button slot="activate" class="primary">AtomS3RへV46fを書き込む</button>
         <span slot="unsupported" class="warning">このブラウザはWeb Serial / WebUSBに対応していません。PC版ChromeまたはEdgeを使用してください。</span>
       </esp-web-install-button>
       <details>
@@ -47,8 +47,8 @@
     </section>
 
     <section class="panel">
-      <h2>V46eの座標系修正</h2>
-      <p>実機の立位ではRaw IMUの重力がほぼ−Z方向でした。V46eではセンサ値を機体座標へ <code>R_x(π)=diag(+1,-1,-1)</code> で変換します。</p>
+      <h2>V46fの座標系修正</h2>
+      <p>実機の立位ではRaw IMUの重力がほぼ−Z方向でした。V46fではセンサ値を機体座標へ <code>R_x(π)=diag(+1,-1,-1)</code> で変換します。</p>
       <div class="grid">
         <article><strong>Accel</strong><p><code>(ax, -ay, -az)</code></p></article>
         <article><strong>Gyro</strong><p><code>(gx, -gy, -gz)</code></p></article>
@@ -69,11 +69,11 @@
 
     <section class="panel safety">
       <h2>実機動作について</h2>
-      <p>このV46eはモータを実際に駆動します。可動部から手・ケーブル・治具を離し、異常時は実験画面の <strong>Emergency stop</strong> を使用してください。</p>
-      <p>Attitude revision: <code>v46e_mekf_ry180_physical_frame_upright_reinit_20260913</code></p>
+      <p>このV46fはモータを実際に駆動します。可動部から手・ケーブル・治具を離し、異常時は実験画面の <strong>Emergency stop</strong> を使用してください。</p>
+      <p>Attitude revision: <code>v46f_mekf_ry180_gyro_y_calibrated_upright_reinit_20260913</code></p>
     </section>
 
-    <footer>atoms3r-mekf-dynamic-validation / V46e</footer>
+    <footer>atoms3r-mekf-dynamic-validation / V46f</footer>
   </main>
 </body>
 </html>

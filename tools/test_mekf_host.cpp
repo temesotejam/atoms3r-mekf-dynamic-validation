@@ -3,14 +3,15 @@
 #include <cstdio>
 #include "../src/mekf6.hpp"
 
-// V46e proper sensor-to-body transform identified from the real installation:
+// V46f calibrated physical sensor-to-body transform identified from the real installation:
 // R_y(pi)=diag(-1,+1,-1). Raw upright gravity is -Z and physical/video pitch
 // rate follows +raw_gy.
 static mekf6::Vec3 accelFilter(float ax, float ay, float az) {
   return {-ax, ay, -az};
 }
+static constexpr float kGyroYScale = 0.908911f;
 static mekf6::Vec3 gyroFilter(float gx, float gy, float gz) {
-  return {mekf6::degToRad(-gx), mekf6::degToRad(gy), mekf6::degToRad(-gz)};
+  return {mekf6::degToRad(-gx), mekf6::degToRad(gy * kGyroYScale), mekf6::degToRad(-gz)};
 }
 static float reportedPitch(const mekf6::Mekf6& f) { return f.eulerDeg().pitch; }
 
@@ -40,20 +41,20 @@ int main() {
   if (std::fabs(upright_euler.roll) > 5.0f) return 13;
   if (std::fabs(upright_euler.pitch - 1.239f) > 0.1f) return 14;
 
-  // 2) Dynamic sign measured from synchronized video: +raw_gy => +pitch.
+  // 2) Dynamic sign and calibrated scale measured from synchronized video.
   f.reset();
   assert(f.initializeFromAccel(accelFilter(0, 0, -1)));
   for (int i = 0; i < 20; ++i) f.predict(gyroFilter(0, 90, 0), 0.005f);
   const float p = reportedPitch(f);
   std::printf("reported_pitch_after_100ms_raw_gy_+90=%.3f\n", p);
-  if (!(p > 8.0f && p < 10.0f)) return 2;
+  if (!(p > 8.0f && p < 8.4f)) return 2;
 
   // 3) Physically consistent +45-deg sweep: +raw gy and +raw ax.
   f.reset();
   assert(f.initializeFromAccel(accelFilter(0, 0, -1)));
   for (int i = 1; i <= 100; ++i) {
     const float theta = mekf6::degToRad(90.0f * i * 0.005f);
-    if (!f.predict(gyroFilter(0, 90, 0), 0.005f)) return 3;
+    if (!f.predict(gyroFilter(0, 90.0f / kGyroYScale, 0), 0.005f)) return 3;
     if (!f.updateAccel(accelFilter(std::sin(theta), 0, -std::cos(theta)))) return 4;
   }
   const auto sweep_diag = f.diagnostics();
@@ -79,6 +80,6 @@ int main() {
   std::printf("q_norm=%.7f\n", qn);
   if (std::fabs(qn - 1.0f) > 1e-5f) return 8;
 
-  std::puts("V46e MEKF Ry180 physical-frame sign/dynamics/rejection test passed");
+  std::puts("V46f MEKF Ry180 calibrated-gyro physical-frame test passed");
   return 0;
 }
