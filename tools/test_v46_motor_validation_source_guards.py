@@ -94,9 +94,13 @@ def main() -> None:
     assert "const bool v46_mekf_dynamic_compare = energy_control_autonomous_mode_" in runner
     assert "status_.pitch_mekf_deg" in runner
     assert "pitch_madgwick_dynamic_abs_deg" in runner
-    assert "v46c_mekf_rx180_upright_reinit_dynamic_beta_compare_20260913" in config
+    assert "MEKF_VIDEO_OUTPUT_SCALE = 0.908911f" in config
+    assert "MEKF_VIDEO_OUTPUT_SIGN = -1.0f" in config
+    assert runner.count("Config::MEKF_VIDEO_OUTPUT_SCALE * raw_mekf_pitch_abs_deg_") == 2
+    assert "status_.pitch_mekf_deg = raw_mekf_pitch_abs_deg_ - offset_mekf_pitch_deg_" in runner
+    assert "v46d_mekf_video_calibrated_rx180_upright_reinit_20260913" in config
 
-    assert "V46c MEKF motor-driven dynamic validation" in main_cpp
+    assert "V46d MEKF motor-driven dynamic validation" in main_cpp
     assert "V7 MOTOR VALIDATION" in main_cpp
     assert "motor output OFF" not in main_cpp
 

@@ -358,7 +358,8 @@ void ExperimentRunner::updateFilterSeries(const ImuReading& r) {
   status_.acc_norm_g = r.acc_norm_g;
   status_.imu_last_update_us = r.last_update_us;
   status_.imu_update_dt_us = r.update_dt_us;
-  status_.pitch_mekf_abs_deg = raw_mekf_pitch_abs_deg_;
+  status_.pitch_mekf_abs_deg = Config::MEKF_VIDEO_OUTPUT_SIGN *
+      Config::MEKF_VIDEO_OUTPUT_SCALE * raw_mekf_pitch_abs_deg_;
   status_.pitch_madgwick_dynamic_abs_deg = raw_dynamic_bias_pitch_deg_[Config::FILTER_ADOPTED_INDEX];
 }
 
@@ -392,7 +393,8 @@ void ExperimentRunner::updateStartupCalibration(const ImuReading& r) {
 }
 
 void ExperimentRunner::updateDisplayedAngles(const ImuReading&) {
-  status_.pitch_mekf_abs_deg = raw_mekf_pitch_abs_deg_;
+  status_.pitch_mekf_abs_deg = Config::MEKF_VIDEO_OUTPUT_SIGN *
+      Config::MEKF_VIDEO_OUTPUT_SCALE * raw_mekf_pitch_abs_deg_;
   status_.pitch_madgwick_dynamic_abs_deg = raw_dynamic_bias_pitch_deg_[Config::FILTER_ADOPTED_INDEX];
   if (passive_capture_mode_) {
     status_.pitch_mekf_deg = raw_mekf_pitch_abs_deg_;
