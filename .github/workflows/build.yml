@@ -15,5 +15,37 @@ jobs:
           python-version: "3.x"
       - name: Install PlatformIO
         run: pip install --upgrade platformio
+      - name: Verify V46 validation identity
+        run: grep -R -q "v46_mekf_adopted_dynamic_beta_compare_20260912" src
       - name: Build AtomS3R firmware
         run: pio run -e atoms3cam
+      - name: Package flash images
+        run: |
+          set -euxo pipefail
+          mkdir -p dist
+          cp .pio/build/atoms3cam/bootloader.bin dist/bootloader.bin
+          cp .pio/build/atoms3cam/partitions.bin dist/partitions.bin
+          cp "$HOME/.platformio/packages/framework-arduinoespressif32/tools/partitions/boot_app0.bin" dist/boot_app0.bin
+          cp .pio/build/atoms3cam/firmware.bin dist/firmware.bin
+          python "$HOME/.platformio/packages/tool-esptoolpy/esptool.py" --chip esp32s3 merge_bin \
+            -o dist/merged-firmware.bin \
+            0x0000 dist/bootloader.bin \
+            0x8000 dist/partitions.bin \
+            0xe000 dist/boot_app0.bin \
+            0x10000 dist/firmware.bin
+          printf '%s\n' \
+            'AtomS3R V46 MEKF dynamic-validation flash layout' \
+            '0x0000  bootloader.bin' \
+            '0x8000  partitions.bin' \
+            '0xe000  boot_app0.bin' \
+            '0x10000 firmware.bin' \
+            'merged-firmware.bin: write at 0x0000' \
+            > dist/FLASH_LAYOUT.txt
+          (cd dist && sha256sum bootloader.bin partitions.bin boot_app0.bin firmware.bin merged-firmware.bin > SHA256SUMS.txt)
+      - name: Upload flashable V46 firmware
+        uses: actions/upload-artifact@v4
+        with:
+          name: atoms3r-v46-mekf-dynamic-validation-${{ github.sha }}
+          path: dist/
+          if-no-files-found: error
+          retention-days: 30
