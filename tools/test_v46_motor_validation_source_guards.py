@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Static guards for the motor-driven V46/V46b attitude-validation path."""
+"""Static guards for the motor-driven V46c attitude-validation path."""
 
 from pathlib import Path
 
@@ -15,7 +15,6 @@ def main() -> None:
     main_cpp = (SRC / "main.cpp").read_text(encoding="utf-8")
     upright = (SRC / "upright_pose_guide.h").read_text(encoding="utf-8")
 
-    # Frozen V7 motor experiment shape.
     for token in (
         '"energy_control_autonomous_v7_side_response_correction_rwlog30s"',
         "ENERGY_CONTROL_AUTONOMOUS_DURATION_MS = 30000UL",
@@ -26,17 +25,12 @@ def main() -> None:
     ):
         assert token in config, token
 
-    # The web UI must expose the actual V7 motor start and ESTOP paths.
     assert 'server_->on("/start-energy-control-autonomous"' in web
     assert "runner_->startEnergyControlAutonomousCapture()" in web
     assert "Start autonomous energy control" in web
     assert 'server_->on("/stop"' in web
     assert 'runner_->requestEmergencyStop("web_estop")' in web
 
-    # The visible page intentionally freezes during a measurement, but polling
-    # must remain parseable and must resume automatically when running becomes
-    # false. V46's intentionally-disabled estimator fields may be NaN inside
-    # firmware but must never escape as invalid JSON numeric tokens.
     for token in (
         "displayFrozen",
         "refreshInFlight",
@@ -48,23 +42,15 @@ def main() -> None:
     ):
         assert token in web, token
 
-    # Actual motor authority remains isolated to explicitly authorized V7 pulses.
     assert "energy_control_autonomous_pulse_live" in runner
     assert "energy_control_autonomous_pulse_authorized_" in runner
     assert "beginEnergyControlAutonomousStartKickPulse" in runner
     assert "beginEnergyControlAutonomousPulse" in runner
     assert "updateEnergyControlAutonomousPulse" in runner
 
-    # Once output is already known off, idle/FINISHED service calls must not
-    # hammer the Roller with redundant zero-current I2C writes. If telemetry
-    # later reports OUTPUT=1, the same stop() path writes zero again.
     assert "if (command_mA_ == 0 && telemetry_.output_raw == 0) return true;" in roller
     assert "telemetry_.output_raw = current_mA == 0 ? 0 : 1;" in roller
 
-    # Hardware workflow: lying-down power-up is intentional. At 10 s the same
-    # LED used for video synchronization becomes a pre-run upright prompt. Once
-    # the measured upright gravity direction is stable it goes dark. The guide
-    # must stop touching the LED as soon as any measurement state is running.
     for token in (
         "GUIDE_LED_ON_AFTER_BOOT_MS = 10000UL",
         "REF_AX = 0.021626f",
@@ -80,10 +66,18 @@ def main() -> None:
     assert "startup_upright_confirmed = true;" in main_cpp
     assert "digitalWrite(Config::SYNC_LED_PIN, LOW);" in main_cpp
 
-    # Autonomous start is allowed only from the measured upright pose. During
-    # the unchanged first OFF step of START_SYNC, stable samples are averaged,
-    # MEKF is reset/reinitialized from gravity, and the startup gyro bias is
-    # re-applied before any motor pulse can be authorized.
+    # V46c: proper right-handed Rx(pi) sensor-to-body rotation. Raw upright is
+    # approximately -Z; body/filter upright must become +Z without the old
+    # ~180-degree Euler-roll branch. The reinit average must use the same map.
+    for token in (
+        "return {r.ax_g, -r.ay_g, -r.az_g};",
+        "mekf6::degToRad(r.gx_dps), mekf6::degToRad(-r.gy_dps), mekf6::degToRad(-r.gz_dps)",
+        "mekf6::degToRad(bx_dps), mekf6::degToRad(-by_dps), mekf6::degToRad(-bz_dps)",
+        "mean_accel_raw.x, -mean_accel_raw.y, -mean_accel_raw.z",
+        "R=diag(+1,-1,-1)",
+    ):
+        assert token in runner, token
+
     for token in (
         'status_.last_error = "upright_pose_required_before_start"',
         "g_v46_mekf_run_reinit.active = true",
@@ -97,19 +91,16 @@ def main() -> None:
     ):
         assert token in runner, token
 
-    # MEKF is the adopted controller/detector attitude; dynamic-beta Madgwick is
-    # retained only as synchronized comparison data during autonomous capture.
     assert "const bool v46_mekf_dynamic_compare = energy_control_autonomous_mode_" in runner
     assert "status_.pitch_mekf_deg" in runner
     assert "pitch_madgwick_dynamic_abs_deg" in runner
-    assert "v46b_mekf_upright_reinit_dynamic_beta_compare_20260913" in config
+    assert "v46c_mekf_rx180_upright_reinit_dynamic_beta_compare_20260913" in config
 
-    # Startup identity must not claim that this build is motor-off only.
-    assert "V46b MEKF motor-driven dynamic validation" in main_cpp
+    assert "V46c MEKF motor-driven dynamic validation" in main_cpp
     assert "V7 MOTOR VALIDATION" in main_cpp
     assert "motor output OFF" not in main_cpp
 
-    print("V46b motor-driven validation source guards passed")
+    print("V46c motor-driven validation source guards passed")
 
 
 if __name__ == "__main__":
