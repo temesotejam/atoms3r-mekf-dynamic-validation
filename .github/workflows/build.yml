@@ -21,6 +21,8 @@ jobs:
         run: python tools/test_current_audit_source_guards.py
       - name: Run RWLOG v46 regression
         run: python tools/test_rwlog_v46_converter.py
+      - name: Check V46 analysis tool
+        run: python -m py_compile tools/analyze_v46_attitude_validation.py
       - name: Run native MEKF dynamics test
         run: |
           g++ -std=c++17 -O2 tools/test_mekf_host.cpp src/mekf6.cpp -o /tmp/test_mekf_host
