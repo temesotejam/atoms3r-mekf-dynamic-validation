@@ -1,6 +1,6 @@
 from pathlib import Path
 
-# Trigger marker: V46h timing migration pass 2.
+# Trigger marker: V46h timing migration pass 3.
 
 
 def replace_once(path: str, old: str, new: str) -> None:
@@ -23,22 +23,21 @@ replace_once(
     'static constexpr char ATTITUDE_VALIDATION_REVISION[] = "v46h_mekf_400hz_web_quiet_predict_20260913";',
 )
 
-# Run-start gravity averaging must count fresh accelerometer frames, not every
-# 400 Hz gyro frame.
+# Run-start gravity averaging already uses fresh accel sequence in V46g; keep it.
 p = Path("src/experiment_runner.cpp")
 text = p.read_text(encoding="utf-8")
-text = text.replace("uint32_t last_imu_update_us = 0;", "uint32_t last_accel_sequence = 0;", 1)
-text = text.replace(
-    "r.last_update_us != g_v46_mekf_run_reinit.last_imu_update_us) {\n      g_v46_mekf_run_reinit.last_imu_update_us = r.last_update_us;",
-    "r.accel_sequence != 0 &&\n        r.accel_sequence != g_v46_mekf_run_reinit.last_accel_sequence) {\n      g_v46_mekf_run_reinit.last_accel_sequence = r.accel_sequence;",
-    1,
-)
+if "r.accel_sequence != g_v46_mekf_run_reinit.last_accel_sequence" not in text:
+    text = text.replace("uint32_t last_imu_update_us = 0;", "uint32_t last_accel_sequence = 0;", 1)
+    text = text.replace(
+        "r.last_update_us != g_v46_mekf_run_reinit.last_imu_update_us) {\n      g_v46_mekf_run_reinit.last_imu_update_us = r.last_update_us;",
+        "r.accel_sequence != 0 &&\n        r.accel_sequence != g_v46_mekf_run_reinit.last_accel_sequence) {\n      g_v46_mekf_run_reinit.last_accel_sequence = r.accel_sequence;",
+        1,
+    )
 p.write_text(text, encoding="utf-8")
 
-# Browser display remains frozen by design during the measurement.  In V46g
-# the JS still fetched the very large /status.json every 500 ms, causing the
-# measured 16--23 ms IMU holes.  Freeze network status polling as well, but
-# keep the emergency-stop POST usable.
+# Browser display remains frozen by design during the measurement. In V46g
+# the JS still fetched the large /status.json every 500 ms. Freeze network
+# status polling as well, while preserving the emergency-stop POST.
 p = Path("src/web_ui.cpp")
 text = p.read_text(encoding="utf-8")
 text = text.replace(
@@ -67,18 +66,17 @@ replace_once(
 replace_once("src/main.cpp", "V46g identity:", "V46h identity:")
 replace_once("src/main.cpp", 'displayLine("V46g MEKF",', 'displayLine("V46h MEKF",')
 
-for path in ["site/index.html"]:
-    p = Path(path)
-    s = p.read_text(encoding="utf-8").replace("V46g", "V46h")
-    s = s.replace("v46g_mekf_400hz_predict_200hz_accel_20260913", "v46h_mekf_400hz_web_quiet_predict_20260913")
-    p.write_text(s, encoding="utf-8")
+p = Path("site/index.html")
+s = p.read_text(encoding="utf-8").replace("V46g", "V46h")
+s = s.replace("v46g_mekf_400hz_predict_200hz_accel_20260913", "v46h_mekf_400hz_web_quiet_predict_20260913")
+p.write_text(s, encoding="utf-8")
 
 p = Path("site/manifest.json")
 s = p.read_text(encoding="utf-8").replace("V46g", "V46h").replace('"version": "0.46.6"', '"version": "0.46.7"')
 p.write_text(s, encoding="utf-8")
 
 # Guard the timing fix itself.
-guard = Path("tools/test_v46g_high_rate_source_guards.py")
+guard = Path("tools/test_v46g_highrate_source_guards.py")
 s = guard.read_text(encoding="utf-8")
 s = s.replace("v46g_mekf_400hz_predict_200hz_accel_20260913", "v46h_mekf_400hz_web_quiet_predict_20260913")
 s = s.replace("IMU_POLL_PERIOD_US = 2500UL", "IMU_POLL_PERIOD_US = 1000UL")
