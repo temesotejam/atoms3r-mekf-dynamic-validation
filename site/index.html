@@ -4,24 +4,24 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#111827">
-  <title>AtomS3R V46b MEKF Motor Validation</title>
+  <title>AtomS3R V46c MEKF Motor Validation</title>
   <link rel="stylesheet" href="styles.css">
   <script type="module" src="https://unpkg.com/esp-web-tools@10.1.1/dist/web/install-button.js?module"></script>
 </head>
 <body>
   <main class="shell">
     <header class="hero">
-      <p class="eyebrow">ATOMS3R / V46b / MOTOR-DRIVEN VALIDATION</p>
+      <p class="eyebrow">ATOMS3R / V46c / MOTOR-DRIVEN VALIDATION</p>
       <h1>MEKF Motor Validation<br><span>Web Flasher</span></h1>
-      <p class="lead">Autonomous Energy Control V7 を実際にモータ駆動しながら、MEKF と dynamic-beta Madgwick を同時記録する V46b ファームウェアです。倒した状態で安全に起動し、測定開始前に立位姿勢からMEKFを再初期化します。</p>
-      <div class="badges"><span>ESP32-S3</span><span>RWLOG v46</span><span>V46b upright reinit</span><span>Madgwick compare</span></div>
+      <p class="lead">Autonomous Energy Control V7 を実際にモータ駆動しながら、MEKF と dynamic-beta Madgwick を同時記録する V46c ファームウェアです。V46b実機データから確認したAtomS3Rの取付方向を反映し、MEKF入力をX軸まわり180°回転した正しい右手系の機体座標へ変換します。</p>
+      <div class="badges"><span>ESP32-S3</span><span>RWLOG v46</span><span>V46c Rx180</span><span>upright reinit</span><span>Madgwick compare</span></div>
     </header>
 
     <section class="panel important">
       <h2>このページから直接書き込めます</h2>
       <p>AtomS3R を USB でPCへ接続し、Chrome または Edge のデスクトップ版で下のボタンを押してください。</p>
       <esp-web-install-button manifest="manifest.json">
-        <button slot="activate" class="primary">AtomS3RへV46bを書き込む</button>
+        <button slot="activate" class="primary">AtomS3RへV46cを書き込む</button>
         <span slot="unsupported" class="warning">このブラウザはWeb Serial / WebUSBに対応していません。PC版ChromeまたはEdgeを使用してください。</span>
       </esp-web-install-button>
       <details>
@@ -40,10 +40,21 @@
         <li>最初は target <strong>8.0 deg</strong> を選択します。</li>
         <li>動画撮影を開始し、同期LEDが映るようにします。</li>
         <li><strong>Start autonomous energy control</strong> を押します。</li>
-        <li>START同期の最初のOFF区間で、安定したAccelを約0.8秒平均してMEKFを再初期化します。起動時に求めたGyro Biasはそのまま再適用します。</li>
+        <li>START同期の最初のOFF区間で安定Accelを約0.8秒平均し、Rx180機体座標へ変換してMEKFを再初期化します。起動時に求めたGyro Biasも同じ座標変換で再適用します。</li>
         <li>その後のSTART/MID/END同期LEDパターンは従来通りです。30秒のモータ駆動測定後、RWLOGをダウンロードします。</li>
       </ol>
       <p class="hint">開始時に 300 mA / 100 ms のSTART_KICKを1回行い、その後はAutonomous Energy Control V7がゼロクロスごとに入力を選択します。立位・静止条件を満たさない状態ではAutonomous開始を拒否します。</p>
+    </section>
+
+    <section class="panel">
+      <h2>V46cの座標系修正</h2>
+      <p>実機の立位ではRaw IMUの重力がほぼ−Z方向でした。V46cではセンサ値を機体座標へ <code>R_x(π)=diag(+1,-1,-1)</code> で変換します。</p>
+      <div class="grid">
+        <article><strong>Accel</strong><p><code>(ax, -ay, -az)</code></p></article>
+        <article><strong>Gyro</strong><p><code>(gx, -gy, -gz)</code></p></article>
+        <article><strong>Pitch rate</strong><p>立位付近で <code>dPitch/dt = -raw gy</code></p></article>
+        <article><strong>Static pitch</strong><p>従来の物理角符号を維持。</p></article>
+      </div>
     </section>
 
     <section class="panel">
@@ -58,11 +69,11 @@
 
     <section class="panel safety">
       <h2>実機動作について</h2>
-      <p>このV46bはモータを実際に駆動します。可動部から手・ケーブル・治具を離し、異常時は実験画面の <strong>Emergency stop</strong> を使用してください。</p>
-      <p>Attitude revision: <code>v46b_mekf_upright_reinit_dynamic_beta_compare_20260913</code></p>
+      <p>このV46cはモータを実際に駆動します。可動部から手・ケーブル・治具を離し、異常時は実験画面の <strong>Emergency stop</strong> を使用してください。</p>
+      <p>Attitude revision: <code>v46c_mekf_rx180_upright_reinit_dynamic_beta_compare_20260913</code></p>
     </section>
 
-    <footer>atoms3r-mekf-dynamic-validation / V46b</footer>
+    <footer>atoms3r-mekf-dynamic-validation / V46c</footer>
   </main>
 </body>
 </html>
