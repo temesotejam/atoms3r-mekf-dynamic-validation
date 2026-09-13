@@ -97,7 +97,7 @@ static constexpr uint32_t MADGWICK_SETTLING_MS = 5000UL;
 // Dedicated manual-release capture. The first window is held static by the
 // operator; it is metadata, not a per-run angle-zero operation.
 static constexpr char PASSIVE_CAPTURE_FIRMWARE_REVISION[] = "energy_control_autonomous_v7_side_response_correction_20260904";
-static constexpr char ATTITUDE_VALIDATION_REVISION[] = "v46_mekf_adopted_dynamic_beta_compare_20260912";
+static constexpr char ATTITUDE_VALIDATION_REVISION[] = "v46b_mekf_upright_reinit_dynamic_beta_compare_20260913";
 static constexpr uint32_t PASSIVE_CAPTURE_DURATION_MS = 60000UL;
 static constexpr uint32_t PASSIVE_STATIC_WINDOW_MS = 3000UL;
 
