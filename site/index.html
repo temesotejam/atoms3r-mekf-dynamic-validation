@@ -13,8 +13,8 @@
     <header class="hero">
       <p class="eyebrow">ATOMS3R / V46h / MOTOR-DRIVEN VALIDATION</p>
       <h1>MEKF Motor Validation<br><span>Web Flasher</span></h1>
-      <p class="lead">Autonomous Energy Control V7 を実際にモータ駆動しながら、MEKF と dynamic-beta Madgwick を同時記録する V46h ファームウェアです。MEKFのIMU→機体座標を実測重力方向と動画角速度に基づくRy(180°)へ修正し、推定状態そのものを固定ホライズン動画と同じ物理Pitch符号にしています。V46b実機データから確認したAtomS3Rの取付方向を反映し、MEKF入力をX軸まわり180°回転した正しい右手系の機体座標へ変換します。</p>
-      <div class="badges"><span>ESP32-S3</span><span>RWLOG v46</span><span>V46h Rx180</span><span>upright reinit</span><span>Madgwick compare</span></div>
+      <p class="lead">Autonomous Energy Control V7 を実際にモータ駆動しながら、MEKF と dynamic-beta Madgwick を同時記録する V46h ファームウェアです。AtomS3R内蔵BMI270をGyro 400 Hz / Accel 200 Hzで使用し、MEKFは新しいGyroごとにpredict、新しいAccelが来たときだけ補正します。さらにposterior状態を保持したまま、制御用だけ短時間先へ非破壊予測します。</p>
+      <div class="badges"><span>ESP32-S3</span><span>BMI270 400/200 Hz</span><span>RWLOG v46</span><span>V46h Ry180</span><span>predicted control</span></div>
     </header>
 
     <section class="panel important">
@@ -40,30 +40,30 @@
         <li>最初は target <strong>8.0 deg</strong> を選択します。</li>
         <li>動画撮影を開始し、同期LEDが映るようにします。</li>
         <li><strong>Start autonomous energy control</strong> を押します。</li>
-        <li>START同期の最初のOFF区間で安定Accelを約0.8秒平均し、Rx180機体座標へ変換してMEKFを再初期化します。起動時に求めたGyro Biasも同じ座標変換で再適用します。</li>
+        <li>START同期の最初のOFF区間でfresh Accelを約0.8秒平均し、Ry(180°)機体座標へ変換してMEKFを再初期化します。起動時に求めたGyro Biasも同じ座標変換で再適用します。</li>
         <li>その後のSTART/MID/END同期LEDパターンは従来通りです。30秒のモータ駆動測定後、RWLOGをダウンロードします。</li>
       </ol>
-      <p class="hint">開始時に 300 mA / 100 ms のSTART_KICKを1回行い、その後はAutonomous Energy Control V7がゼロクロスごとに入力を選択します。立位・静止条件を満たさない状態ではAutonomous開始を拒否します。</p>
+      <p class="hint">測定中はWeb画面の表示だけでなく status.json の定期取得も止め、400 Hz姿勢推定を妨げないようにしています。Emergency stopのPOSTは測定中も使用できます。</p>
     </section>
 
     <section class="panel">
-      <h2>V46hの座標系修正</h2>
-      <p>実機の立位ではRaw IMUの重力がほぼ−Z方向でした。V46hではセンサ値を機体座標へ <code>R_x(π)=diag(+1,-1,-1)</code> で変換します。</p>
+      <h2>V46hのIMU座標と更新</h2>
+      <p>実機の立位ではRaw IMUの重力がほぼ−Z方向で、動画の物理Pitch角速度は+raw gyと一致しました。V46hでは右手系を保つ <code>R_y(π)=diag(-1,+1,-1)</code> を用います。</p>
       <div class="grid">
-        <article><strong>Accel</strong><p><code>(ax, -ay, -az)</code></p></article>
-        <article><strong>Gyro</strong><p><code>(gx, -gy, -gz)</code></p></article>
-        <article><strong>Pitch rate</strong><p>立位付近で <code>dPitch/dt = -raw gy</code></p></article>
-        <article><strong>Static pitch</strong><p>従来の物理角符号を維持。</p></article>
+        <article><strong>Accel</strong><p><code>(-ax, +ay, -az)</code></p></article>
+        <article><strong>Gyro</strong><p><code>(-gx, +gy×0.908911, -gz)</code></p></article>
+        <article><strong>Gyro predict</strong><p>400 Hz（2.5 ms ODR）</p></article>
+        <article><strong>Accel correction</strong><p>fresh Accelのみ 200 Hz</p></article>
       </div>
     </section>
 
     <section class="panel">
-      <h2>姿勢推定の比較</h2>
+      <h2>posterior と制御予測</h2>
       <div class="grid">
-        <article><strong>MEKF</strong><p><code>pitch_mekf_abs_deg</code><br>制御・検出に採用。</p></article>
-        <article><strong>Madgwick</strong><p><code>pitch_madgwick_dynamic_abs_deg</code><br>比較専用。</p></article>
-        <article><strong>Accel reject</strong><p><code>mekf_accel_confidence</code><br><code>mekf_accel_used</code></p></article>
-        <article><strong>同期</strong><p>START / MID / END LED anchorsで動画とRWLOGを対応付けます。</p></article>
+        <article><strong>Posterior</strong><p><code>pitch_mekf_abs_deg</code><br>動画との姿勢推定精度比較用。</p></article>
+        <article><strong>Predicted</strong><p><code>pitch_mekf_predicted_abs_deg</code><br>posteriorのコピーだけを未来へ伝播。</p></article>
+        <article><strong>Control</strong><p><code>pitch_mekf_control_deg</code><br>predictedから開始時オフセットを引いた制御座標。</p></article>
+        <article><strong>Horizon</strong><p><code>sample age + 2.5 ms</code><br>最大10 ms。</p></article>
       </div>
     </section>
 
