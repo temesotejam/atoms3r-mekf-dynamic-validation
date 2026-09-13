@@ -1490,6 +1490,10 @@ RwLogFileHeader PsramLogger::buildHeader(uint32_t metadata_size) const {
   header.event_row_size = 0;
   header.log_period_ms = Config::LOG_PERIOD_MS;
   header.imu_period_ms = Config::IMU_PERIOD_MS;
+  header.reserved[0] = Config::IMU_POLL_PERIOD_US;
+  header.reserved[1] = Config::BMI270_GYRO_ODR_HZ;
+  header.reserved[2] = Config::BMI270_ACCEL_ODR_HZ;
+  header.reserved[3] = Config::MEKF_CONTROL_PREDICTION_FIXED_US;
   header.roller_read_period_ms = Config::ROLLER_READ_PERIOD_MS;
   header.web_update_period_ms = Config::WEB_UPDATE_PERIOD_MS;
   header.total_trials = Config::BETA_SWEEP_TRIAL_COUNT;

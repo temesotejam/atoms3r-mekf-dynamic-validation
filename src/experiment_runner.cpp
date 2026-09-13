@@ -8,7 +8,7 @@ namespace {
 struct V46MekfRunReinitAccumulator {
   bool active = false;
   bool done = false;
-  uint32_t last_imu_update_us = 0;
+  uint32_t last_accel_sequence = 0;
   uint32_t stable_sample_count = 0;
   double ax_sum_g = 0.0;
   double ay_sum_g = 0.0;
@@ -80,17 +80,17 @@ void ExperimentRunner::begin(PsramLogger& logger, ImuManager& imu, Roller485Mana
 }
 
 void ExperimentRunner::beginFilters() {
-  constexpr float imu_hz = 1000.0f / Config::IMU_PERIOD_MS;
+  constexpr float madgwick_hz = static_cast<float>(Config::BMI270_ACCEL_ODR_HZ);
   mekf_.reset();
   mekf_.setConfig(makeMekfConfig());
   mekf_initialized_ = false;
-  filter_beta1_raw_.begin(imu_hz);
-  filter_beta1_bias_.begin(imu_hz);
+  filter_beta1_raw_.begin(madgwick_hz);
+  filter_beta1_bias_.begin(madgwick_hz);
   filter_beta1_raw_.setBeta(Config::MADGWICK_BETA_ONE);
   filter_beta1_bias_.setBeta(Config::MADGWICK_BETA_ONE);
   for (uint8_t i = 0; i < Config::DYNAMIC_BETA_COUNT; ++i) {
-    filter_dynamic_raw_[i].begin(imu_hz);
-    filter_dynamic_bias_[i].begin(imu_hz);
+    filter_dynamic_raw_[i].begin(madgwick_hz);
+    filter_dynamic_bias_[i].begin(madgwick_hz);
     beta_smooth_[i] = betaCeilingForStrategy(i);
     filter_dynamic_raw_[i].setBeta(beta_smooth_[i]);
     filter_dynamic_bias_[i].setBeta(beta_smooth_[i]);
@@ -128,7 +128,7 @@ void ExperimentRunner::update() {
   status_.roller_battery_mV = roller_->telemetry().battery_mV;
 
   const ImuReading& r = imu_->reading();
-  if (r.last_update_us != 0 && r.last_update_us != last_imu_update_us_) {
+  if (r.gyro_sequence != 0 && r.gyro_sequence != last_imu_update_us_) {
     updateFilterSeries(r);
     updateDisplayedAngles(r);
     if (status_.state == ExperimentState::STARTUP_GYRO_CALIB) updateStartupCalibration(r);
@@ -137,7 +137,7 @@ void ExperimentRunner::update() {
       updateQ1ShadowAtZeroCross(now_ms);
       if (energy_control_autonomous_mode_) updateEnergyControlAutonomousMotion(now_ms);
     }
-    last_imu_update_us_ = r.last_update_us;
+    last_imu_update_us_ = r.gyro_sequence;
   }
 
   if (status_.state == ExperimentState::MADGWICK_SETTLING &&
@@ -197,8 +197,9 @@ void ExperimentRunner::update() {
 }
 
 void ExperimentRunner::updateFilterSeries(const ImuReading& r) {
-  const float dt_s = r.update_dt_us > 0 ? static_cast<float>(r.update_dt_us) / 1000000.0f
-                                        : static_cast<float>(Config::IMU_PERIOD_MS) / 1000.0f;
+  const float dt_s = r.gyro_update_dt_us > 0 ? static_cast<float>(r.gyro_update_dt_us) / 1000000.0f
+                                             : static_cast<float>(Config::IMU_POLL_PERIOD_US) / 1000000.0f;
+  const bool accel_is_new_for_filter = r.accel_sequence != 0 && r.accel_sequence != last_mekf_accel_sequence_;
   const float pitch_rate = Config::GYRO_PITCH_RATE_SIGN * r.gy_dps;
   const bool v46_mekf_dynamic_compare = energy_control_autonomous_mode_;
   if (!v46_mekf_dynamic_compare) {
@@ -220,11 +221,20 @@ void ExperimentRunner::updateFilterSeries(const ImuReading& r) {
     }
   }
   if (mekf_initialized_ && mekf_.predict(mekf_gyro, dt_s)) {
-    mekf_.updateAccel(mekf_accel);
+    if (accel_is_new_for_filter) {
+      mekf_.updateAccel(mekf_accel);
+      last_mekf_accel_sequence_ = r.accel_sequence;
+    }
   }
   if (mekf_initialized_) {
     const auto e = mekf_.eulerDeg();
     raw_mekf_pitch_abs_deg_ = e.pitch;
+    const uint32_t sample_age_us = r.last_gyro_update_us == 0 ? 0 : static_cast<uint32_t>(micros() - r.last_gyro_update_us);
+    const uint32_t horizon_us = min<uint32_t>(Config::MEKF_CONTROL_PREDICTION_MAX_US,
+        sample_age_us + Config::MEKF_CONTROL_PREDICTION_FIXED_US);
+    status_.mekf_prediction_horizon_us = horizon_us;
+    raw_mekf_predicted_abs_deg_ = mekf_.predictEulerDeg(mekf_gyro, static_cast<float>(horizon_us) * 1.0e-6f).pitch;
+    status_.pitch_mekf_predicted_abs_deg = raw_mekf_predicted_abs_deg_;
     const auto q = mekf_.quaternion();
     status_.mekf_q_w = q.w; status_.mekf_q_x = q.x;
     status_.mekf_q_y = q.y; status_.mekf_q_z = q.z;
@@ -237,14 +247,14 @@ void ExperimentRunner::updateFilterSeries(const ImuReading& r) {
     status_.mekf_accel_confidence = d.accel_confidence;
     status_.mekf_accel_residual_deg = d.accel_direction_residual_deg;
     status_.mekf_accel_mag_error_g = d.accel_magnitude_error_g;
-    status_.mekf_accel_used = d.accel_used;
+    status_.mekf_accel_used = accel_is_new_for_filter && d.accel_used;
   }
-  if (!v46_mekf_dynamic_compare) {
+  if (!v46_mekf_dynamic_compare && accel_is_new_for_filter) {
     filter_beta1_raw_.updateIMU(r.gx_dps, r.gy_dps, r.gz_dps, r.ax_g, r.ay_g, r.az_g);
     filter_beta1_bias_.updateIMU(r.gx_dps - gx_bias, r.gy_dps - gy_bias, r.gz_dps - gz_bias, r.ax_g, r.ay_g, r.az_g);
     raw_beta1_raw_pitch_deg_ = Config::PITCH_SIGN * filter_beta1_raw_.getPitch();
     raw_beta1_bias_pitch_deg_ = Config::PITCH_SIGN * filter_beta1_bias_.getPitch();
-  } else {
+  } else if (v46_mekf_dynamic_compare) {
     raw_beta1_raw_pitch_deg_ = NAN;
     raw_beta1_bias_pitch_deg_ = NAN;
   }
@@ -313,17 +323,21 @@ void ExperimentRunner::updateFilterSeries(const ImuReading& r) {
       if (beta_target > phase_ceiling) beta_target = phase_ceiling;
       beta_smooth_[i] = beta_target;
     }
-    if (!v46_mekf_dynamic_compare) {
-      filter_dynamic_raw_[i].setBeta(beta_smooth_[i]);
-      filter_dynamic_raw_[i].updateIMU(r.gx_dps, r.gy_dps, r.gz_dps, r.ax_g, r.ay_g, r.az_g);
-      raw_dynamic_raw_pitch_deg_[i] = Config::PITCH_SIGN * filter_dynamic_raw_[i].getPitch();
-    } else {
+    if (accel_is_new_for_filter) {
+      if (!v46_mekf_dynamic_compare) {
+        filter_dynamic_raw_[i].setBeta(beta_smooth_[i]);
+        filter_dynamic_raw_[i].updateIMU(r.gx_dps, r.gy_dps, r.gz_dps, r.ax_g, r.ay_g, r.az_g);
+        raw_dynamic_raw_pitch_deg_[i] = Config::PITCH_SIGN * filter_dynamic_raw_[i].getPitch();
+      } else {
+        raw_dynamic_raw_pitch_deg_[i] = NAN;
+      }
+      filter_dynamic_bias_[i].setBeta(beta_smooth_[i]);
+      filter_dynamic_bias_[i].updateIMU(r.gx_dps - gx_bias, r.gy_dps - gy_bias, r.gz_dps - gz_bias,
+                                        r.ax_g, r.ay_g, r.az_g);
+      raw_dynamic_bias_pitch_deg_[i] = Config::PITCH_SIGN * filter_dynamic_bias_[i].getPitch();
+    } else if (v46_mekf_dynamic_compare) {
       raw_dynamic_raw_pitch_deg_[i] = NAN;
     }
-    filter_dynamic_bias_[i].setBeta(beta_smooth_[i]);
-    filter_dynamic_bias_[i].updateIMU(r.gx_dps - gx_bias, r.gy_dps - gy_bias, r.gz_dps - gz_bias, r.ax_g, r.ay_g,
-                                      r.az_g);
-    raw_dynamic_bias_pitch_deg_[i] = Config::PITCH_SIGN * filter_dynamic_bias_[i].getPitch();
     status_.beta_target_series[i] = beta_target;
     status_.beta_smooth_series[i] = beta_smooth_[i];
   }
@@ -359,9 +373,10 @@ void ExperimentRunner::updateFilterSeries(const ImuReading& r) {
   status_.gy_dps = r.gy_dps;
   status_.gz_dps = r.gz_dps;
   status_.acc_norm_g = r.acc_norm_g;
-  status_.imu_last_update_us = r.last_update_us;
-  status_.imu_update_dt_us = r.update_dt_us;
+  status_.imu_last_update_us = r.last_gyro_update_us;
+  status_.imu_update_dt_us = r.gyro_update_dt_us;
   status_.pitch_mekf_abs_deg = raw_mekf_pitch_abs_deg_;
+  status_.pitch_mekf_predicted_abs_deg = raw_mekf_predicted_abs_deg_;
   status_.pitch_madgwick_dynamic_abs_deg = raw_dynamic_bias_pitch_deg_[Config::FILTER_ADOPTED_INDEX];
 }
 
@@ -389,6 +404,8 @@ void ExperimentRunner::updateStartupCalibration(const ImuReading& r) {
     mekf_.setGyroBiasRadS(mekfStartupBiasFromRaw(
         status_.gyro_bias_x_dps, status_.gyro_bias_y_dps, status_.gyro_bias_z_dps));
     raw_mekf_pitch_abs_deg_ = mekf_.eulerDeg().pitch;
+    raw_mekf_predicted_abs_deg_ = raw_mekf_pitch_abs_deg_;
+    status_.pitch_mekf_predicted_abs_deg = raw_mekf_predicted_abs_deg_;
   }
   settling_start_ms_ = millis();
   status_.state = ExperimentState::MADGWICK_SETTLING;
@@ -396,6 +413,7 @@ void ExperimentRunner::updateStartupCalibration(const ImuReading& r) {
 
 void ExperimentRunner::updateDisplayedAngles(const ImuReading&) {
   status_.pitch_mekf_abs_deg = raw_mekf_pitch_abs_deg_;
+  status_.pitch_mekf_predicted_abs_deg = raw_mekf_predicted_abs_deg_;
   status_.pitch_madgwick_dynamic_abs_deg = raw_dynamic_bias_pitch_deg_[Config::FILTER_ADOPTED_INDEX];
   if (passive_capture_mode_) {
     status_.pitch_mekf_deg = raw_mekf_pitch_abs_deg_;
@@ -409,7 +427,7 @@ void ExperimentRunner::updateDisplayedAngles(const ImuReading&) {
     status_.pitch_madgwick_dynamic_bias_deg = raw_dynamic_bias_pitch_deg_[Config::FILTER_ADOPTED_INDEX];
     status_.pitch_accel_only_deg = raw_accel_pitch_deg_;
   } else {
-    status_.pitch_mekf_deg = raw_mekf_pitch_abs_deg_ - offset_mekf_pitch_deg_;
+    status_.pitch_mekf_deg = raw_mekf_predicted_abs_deg_ - offset_mekf_pitch_deg_;
     status_.pitch_madgwick_beta1_raw_deg = raw_beta1_raw_pitch_deg_ - offset_beta1_raw_deg_;
     status_.pitch_madgwick_beta1_bias_deg = raw_beta1_bias_pitch_deg_ - offset_beta1_bias_deg_;
     for (uint8_t i = 0; i < Config::DYNAMIC_BETA_COUNT; ++i) {
@@ -2843,9 +2861,9 @@ void ExperimentRunner::updateStartSync(uint32_t now_ms) {
   if (energy_control_autonomous_mode_ && g_v46_mekf_run_reinit.active &&
       !g_v46_mekf_run_reinit.done && sync_step_ == 0) {
     const ImuReading& r = imu_->reading();
-    if (r.last_update_us != 0 &&
-        r.last_update_us != g_v46_mekf_run_reinit.last_imu_update_us) {
-      g_v46_mekf_run_reinit.last_imu_update_us = r.last_update_us;
+    if (r.accel_sequence != 0 &&
+        r.accel_sequence != g_v46_mekf_run_reinit.last_accel_sequence) {
+      g_v46_mekf_run_reinit.last_accel_sequence = r.accel_sequence;
       if (UprightPoseGuide::isUprightStableSample(r)) {
         g_v46_mekf_run_reinit.ax_sum_g += r.ax_g;
         g_v46_mekf_run_reinit.ay_sum_g += r.ay_g;

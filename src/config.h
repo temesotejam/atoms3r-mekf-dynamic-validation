@@ -79,7 +79,15 @@ static constexpr float CURRENT_ROLL_TARGET_MIN_DEG = -18.0f;
 static constexpr float CURRENT_ROLL_TARGET_MAX_DEG = 18.0f;
 static constexpr char CURRENT_ROLL_UI_REVISION[] = "current_roll_static_ui_v1_20260828";
 
-static constexpr uint16_t IMU_PERIOD_MS = 5;
+// V46g high-rate BMI270 schedule. Exact timing is microsecond-based.
+static constexpr uint32_t IMU_POLL_PERIOD_US = 2500UL;
+static constexpr uint16_t IMU_PERIOD_MS = 2;  // legacy integer RWLOG header field only
+static constexpr uint16_t BMI270_GYRO_ODR_HZ = 400;
+static constexpr uint16_t BMI270_ACCEL_ODR_HZ = 200;
+static constexpr uint8_t BMI270_GYRO_ODR_CODE = 0x0A;
+static constexpr uint8_t BMI270_ACCEL_ODR_CODE = 0x09;
+static constexpr uint32_t MEKF_CONTROL_PREDICTION_FIXED_US = 2500UL;
+static constexpr uint32_t MEKF_CONTROL_PREDICTION_MAX_US = 10000UL;
 static constexpr uint16_t LOG_PERIOD_MS = 20;
 static constexpr uint16_t ROLLER_READ_PERIOD_MS = 20;
 // Actual-current audit only. While a motor command is active, CURRENT_READBACK
@@ -97,7 +105,7 @@ static constexpr uint32_t MADGWICK_SETTLING_MS = 5000UL;
 // Dedicated manual-release capture. The first window is held static by the
 // operator; it is metadata, not a per-run angle-zero operation.
 static constexpr char PASSIVE_CAPTURE_FIRMWARE_REVISION[] = "energy_control_autonomous_v7_side_response_correction_20260904";
-static constexpr char ATTITUDE_VALIDATION_REVISION[] = "v46f_mekf_ry180_gyro_y_calibrated_upright_reinit_20260913";
+static constexpr char ATTITUDE_VALIDATION_REVISION[] = "v46g_mekf_400hz_predict_200hz_accel_20260913";
 static constexpr float MEKF_GYRO_Y_SCALE = 0.908911f;
 static constexpr uint32_t PASSIVE_CAPTURE_DURATION_MS = 60000UL;
 static constexpr uint32_t PASSIVE_STATIC_WINDOW_MS = 3000UL;

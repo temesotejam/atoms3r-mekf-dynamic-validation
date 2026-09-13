@@ -52,7 +52,9 @@ struct ExperimentStatus {
   float gyro_bias_pitch_dps = 0.0f;
   // V46 adopted attitude and online comparison diagnostics.
   float pitch_mekf_deg = 0.0f;              // run-relative control/detector angle when applicable
-  float pitch_mekf_abs_deg = 0.0f;          // continuous MEKF physical/video body-frame pitch coordinate
+  float pitch_mekf_abs_deg = 0.0f;          // posterior physical/video body-frame pitch
+  float pitch_mekf_predicted_abs_deg = 0.0f; // one-step-ahead control-time pitch
+  uint32_t mekf_prediction_horizon_us = 0;
   float pitch_madgwick_dynamic_abs_deg = 0.0f;
   float mekf_q_w = 1.0f;
   float mekf_q_x = 0.0f;
@@ -410,7 +412,8 @@ private:
   uint32_t trial_start_ms_ = 0;
   uint32_t rest_start_ms_ = 0;
   uint64_t run_start_us_ = 0;
-  uint32_t last_imu_update_us_ = 0;
+  uint32_t last_imu_update_us_ = 0;  // V46g: last consumed gyro sequence
+  uint32_t last_mekf_accel_sequence_ = 0;
   uint32_t last_log_us_ = 0;
   uint32_t static_rate_since_ms_ = 0;
   float display_zero_offset_deg_ = 0.0f;
@@ -642,6 +645,7 @@ private:
   float offset_dynamic_bias_deg_[Config::DYNAMIC_BETA_COUNT] = {};
   float offset_accel_deg_ = 0.0f;
   float raw_mekf_pitch_abs_deg_ = 0.0f;
+  float raw_mekf_predicted_abs_deg_ = 0.0f;
   float offset_mekf_pitch_deg_ = 0.0f;
   bool mekf_initialized_ = false;
   mekf6::Mekf6 mekf_;

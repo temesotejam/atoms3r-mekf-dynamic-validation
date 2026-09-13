@@ -67,6 +67,7 @@ class Mekf6 {
   bool updateAccel(const Vec3& accel_g);
   Quaternion quaternion() const { return q_; }
   EulerDeg eulerDeg() const;
+  EulerDeg predictEulerDeg(const Vec3& gyro_rad_s, float dt_s) const;
   Diagnostics diagnostics() const { return diag_; }
 
  private:

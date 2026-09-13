@@ -31,6 +31,18 @@ struct ImuReading {
   uint8_t beta_mode = 0;
   uint8_t beta_update_mode = 0;
   uint16_t time_since_last_pulse_ms = 65535;
+  bool accel_fresh = false;
+  bool gyro_fresh = false;
+  uint8_t sensor_mask = 0;
+  bool rate_config_ok = false;
+  uint8_t bmi270_acc_conf = 0;
+  uint8_t bmi270_gyr_conf = 0;
+  uint32_t accel_sequence = 0;
+  uint32_t gyro_sequence = 0;
+  uint32_t accel_update_dt_us = 0;
+  uint32_t gyro_update_dt_us = 0;
+  uint32_t last_accel_update_us = 0;
+  uint32_t last_gyro_update_us = 0;
   uint32_t update_dt_us = 0;
   uint32_t last_update_us = 0;
   uint32_t last_update_ms = 0;
@@ -46,7 +58,7 @@ class ImuManager {
   void forceSmoothBeta(float beta, uint8_t update_mode);
 
   const ImuReading& reading() const { return reading_; }
-  bool ok() const { return imu_present_ && reading_.imu_ok; }
+  bool ok() const { return imu_present_ && reading_.imu_ok && reading_.rate_config_ok; }
   bool stale(uint32_t now_ms) const;
   const char* lastError() const { return last_error_; }
 
@@ -54,7 +66,8 @@ class ImuManager {
   ImuReading reading_;
   bool imu_present_ = false;
   uint32_t last_due_us_ = 0;
-  uint32_t prev_update_us_ = 0;
+  uint32_t prev_gyro_update_us_ = 0;
+  uint32_t prev_accel_update_us_ = 0;
   uint8_t consecutive_errors_ = 0;
   bool beta_context_pulse_active_ = false;
   uint32_t beta_context_time_since_last_pulse_ms_ = 65535;

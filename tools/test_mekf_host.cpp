@@ -64,6 +64,16 @@ int main() {
   if (std::fabs(reportedPitch(f) - 45.0f) > 0.5f) return 5;
   if (!sweep_diag.accel_used || sweep_diag.accel_confidence < 0.99f) return 6;
 
+  // 3b) V46g one-step prediction must not mutate the posterior.
+  f.reset();
+  assert(f.initializeFromAccel(accelFilter(0, 0, -1)));
+  const float posterior_before = reportedPitch(f);
+  const auto pred = f.predictEulerDeg(gyroFilter(0, 90, 0), 0.0025f);
+  const float posterior_after = reportedPitch(f);
+  std::printf("v46g_predicted_pitch_2p5ms=%.4f posterior_after=%.4f\n", pred.pitch, posterior_after);
+  if (!(pred.pitch > 0.19f && pred.pitch < 0.22f)) return 15;
+  if (std::fabs(posterior_before - posterior_after) > 1.0e-6f) return 16;
+
   // 4) Strong translational acceleration must still be rejected.
   f.reset();
   assert(f.initializeFromAccel(accelFilter(0, 0, -1)));
@@ -80,6 +90,6 @@ int main() {
   std::printf("q_norm=%.7f\n", qn);
   if (std::fabs(qn - 1.0f) > 1e-5f) return 8;
 
-  std::puts("V46f MEKF Ry180 calibrated-gyro physical-frame test passed");
+  std::puts("V46g MEKF 400Hz prediction / 200Hz accel test passed");
   return 0;
 }

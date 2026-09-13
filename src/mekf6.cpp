@@ -266,6 +266,21 @@ void Mekf6::symmetrizeCovariance() {
   }
 }
 
+EulerDeg Mekf6::predictEulerDeg(const Vec3& gyro_rad_s, float dt_s) const {
+  if (!std::isfinite(dt_s) || dt_s <= 0.0f) return eulerDeg();
+  const Vec3 omega{gyro_rad_s.x - bias_.x, gyro_rad_s.y - bias_.y, gyro_rad_s.z - bias_.z};
+  const Quaternion q = quatNormalized(quatMultiply(q_, deltaQuat({omega.x * dt_s, omega.y * dt_s, omega.z * dt_s})));
+  const float sinr_cosp = 2.0f * (q.w*q.x + q.y*q.z);
+  const float cosr_cosp = 1.0f - 2.0f * (q.x*q.x + q.y*q.y);
+  const float roll = std::atan2(sinr_cosp, cosr_cosp);
+  const float sinp = clampf(2.0f * (q.w*q.y - q.z*q.x), -1.0f, 1.0f);
+  const float pitch = std::asin(sinp);
+  const float siny_cosp = 2.0f * (q.w*q.z + q.x*q.y);
+  const float cosy_cosp = 1.0f - 2.0f * (q.y*q.y + q.z*q.z);
+  const float yaw = std::atan2(siny_cosp, cosy_cosp);
+  return {radToDeg(roll), radToDeg(pitch), radToDeg(yaw)};
+}
+
 EulerDeg Mekf6::eulerDeg() const {
   const Quaternion q = quatNormalized(q_);
   const float sinr_cosp = 2.0f * (q.w * q.x + q.y * q.z);
