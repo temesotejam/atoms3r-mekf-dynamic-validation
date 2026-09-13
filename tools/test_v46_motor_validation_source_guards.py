@@ -102,7 +102,7 @@ def main() -> None:
     assert "const bool v46_mekf_dynamic_compare = energy_control_autonomous_mode_" in runner
     assert "status_.pitch_mekf_deg" in runner
     assert "pitch_madgwick_dynamic_abs_deg" in runner
-    assert "v46_mekf_adopted_dynamic_beta_compare_20260912" in config
+    assert "v46b_mekf_upright_reinit_dynamic_beta_compare_20260913" in config
 
     # Startup identity must not claim that this build is motor-off only.
     assert "V46 MEKF motor-driven dynamic validation" in main_cpp
