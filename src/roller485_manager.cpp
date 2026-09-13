@@ -13,37 +13,22 @@ static constexpr uint8_t REG_CURRENT = 0xB0;
 static constexpr uint8_t REG_CURRENT_READBACK = 0xC0;
 
 bool Roller485Manager::begin() {
-  Wire.begin(Config::I2C_SDA_PIN, Config::I2C_SCL_PIN);
-  Wire.setClock(Config::I2C_HZ);
-  Wire.setTimeOut(Config::I2C_TIMEOUT_MS);
-
-  Wire.beginTransmission(Config::ROLLER_ADDR);
-  const bool present = Wire.endTransmission() == 0;
-  if (!present) {
-    telemetry_.roller_ok = false;
-    last_error_ = "roller_not_found";
-    publishTelemetry();
-    return false;
-  }
-
-  bool ok = true;
-  ok &= writeU8(REG_MODE, Config::ROLLER_MODE_CURRENT);
-  ok &= writeI32(REG_CURRENT, 0);
-  ok &= writeU8(REG_OUTPUT, 0);
-  telemetry_.roller_ok = ok;
-  telemetry_.mode_raw = Config::ROLLER_MODE_CURRENT;
-  telemetry_.output_raw = 0;
-  command_mA_ = 0;
+  // V46j: do not touch Wire from the Arduino/control core. Core 0 will own the
+  // Roller bus from initialization through all commands and telemetry reads.
+  telemetry_ = RollerTelemetry{};
+  telemetry_snapshot_ = RollerTelemetry{};
   requested_current_mA_ = 0;
-  telemetry_.requested_current_mA = 0;
-  telemetry_.applied_current_mA = 0;
-  last_error_ = ok ? "" : "roller_zero_failed";
+  command_mA_ = 0;
+  io_task_running_ = false;
+  io_task_ready_ = false;
+  io_task_init_failed_ = false;
+  last_error_ = "roller_io_task_not_started";
   publishTelemetry();
-  return ok;
+  return true;
 }
 
 bool Roller485Manager::startIoTask(uint8_t core_id, uint8_t priority, uint32_t stack_bytes) {
-  if (io_task_running_) return true;
+  if (io_task_ready_) return true;
   if (command_queue_ == nullptr) {
     command_queue_ = xQueueCreate(4, sizeof(RollerCommand));
     if (command_queue_ == nullptr) {
@@ -51,6 +36,7 @@ bool Roller485Manager::startIoTask(uint8_t core_id, uint8_t priority, uint32_t s
       return false;
     }
   }
+  io_task_init_failed_ = false;
   const BaseType_t rc = xTaskCreatePinnedToCore(
       &Roller485Manager::ioTaskEntry, "roller485-io", stack_bytes, this,
       priority, &io_task_handle_, core_id);
@@ -61,6 +47,18 @@ bool Roller485Manager::startIoTask(uint8_t core_id, uint8_t priority, uint32_t s
     last_error_ = "roller_io_task_create_failed";
     return false;
   }
+
+  // Do not report task success until Core 0 has initialized Wire, found the
+  // Roller, forced zero output, and completed one telemetry snapshot.
+  const uint32_t start_ms = millis();
+  while (!io_task_ready_ && !io_task_init_failed_ &&
+         static_cast<uint32_t>(millis() - start_ms) < 1000UL) {
+    vTaskDelay(pdMS_TO_TICKS(1));
+  }
+  if (!io_task_ready_) {
+    if (!io_task_init_failed_) last_error_ = "roller_io_task_start_timeout";
+    return false;
+  }
   return true;
 }
 
@@ -68,17 +66,73 @@ void Roller485Manager::ioTaskEntry(void* arg) {
   static_cast<Roller485Manager*>(arg)->ioTaskLoop();
 }
 
+bool Roller485Manager::initializeIoOwner() {
+  Wire.begin(Config::I2C_SDA_PIN, Config::I2C_SCL_PIN);
+  Wire.setClock(Config::I2C_HZ);
+  Wire.setTimeOut(Config::I2C_TIMEOUT_MS);
+
+  Wire.beginTransmission(Config::ROLLER_ADDR);
+  if (Wire.endTransmission() != 0) {
+    telemetry_.roller_ok = false;
+    last_error_ = "roller_not_found";
+    return false;
+  }
+
+  bool ok = true;
+  ok &= writeU8(REG_MODE, Config::ROLLER_MODE_CURRENT);
+  ok &= writeI32(REG_CURRENT, 0);
+  ok &= writeU8(REG_OUTPUT, 0);
+  recordIo(ok);
+  if (!ok) {
+    last_error_ = "roller_zero_failed";
+    return false;
+  }
+
+  command_mA_ = 0;
+  requested_current_mA_ = 0;
+  telemetry_.mode_raw = Config::ROLLER_MODE_CURRENT;
+  telemetry_.output_raw = 0;
+  telemetry_.requested_current_mA = 0;
+  telemetry_.applied_current_mA = 0;
+
+  // Force one full status read before declaring READY. This makes battery=0 or
+  // an inaccessible device a startup failure instead of a later motor surprise.
+  last_read_due_us_ = 0;
+  update();
+  if (!telemetry_.roller_ok || telemetry_.consecutive_errors != 0) {
+    if (last_error_[0] == '\0') last_error_ = "roller_initial_telemetry_failed";
+    return false;
+  }
+  last_error_ = "";
+  return true;
+}
+
 void Roller485Manager::ioTaskLoop() {
   io_task_running_ = true;
   telemetry_.io_task_running = true;
+  telemetry_.io_task_ready = false;
+  telemetry_.io_task_init_failed = false;
+  publishTelemetry();
+
+  if (!initializeIoOwner()) {
+    io_task_init_failed_ = true;
+    io_task_ready_ = false;
+    telemetry_.io_task_running = false;
+    telemetry_.io_task_ready = false;
+    telemetry_.io_task_init_failed = true;
+    publishTelemetry();
+    vTaskDelete(nullptr);
+    return;
+  }
+
+  io_task_ready_ = true;
+  telemetry_.io_task_ready = true;
   publishTelemetry();
 
   for (;;) {
     RollerCommand cmd;
     while (command_queue_ && xQueueReceive(command_queue_, &cmd, 0) == pdTRUE) {
       if (!applyCurrentMa(cmd)) {
-        // Fail closed inside the I/O owner task. A failed nonzero write is never
-        // allowed to leave a requested output latched without an immediate zero attempt.
         requested_current_mA_ = 0;
         RollerCommand zero;
         zero.current_mA = 0;
@@ -90,8 +144,6 @@ void Roller485Manager::ioTaskLoop() {
 
     update();
 
-    // Independent fail-closed reconciliation: if the desired state is zero but
-    // either the applied command or observed OUTPUT is nonzero, force zero here.
     if (requested_current_mA_ == 0 && (command_mA_ != 0 || telemetry_.output_raw != 0)) {
       RollerCommand zero;
       zero.current_mA = 0;
@@ -101,12 +153,11 @@ void Roller485Manager::ioTaskLoop() {
     }
 
     telemetry_.io_task_running = true;
+    telemetry_.io_task_ready = true;
+    telemetry_.io_task_init_failed = false;
     telemetry_.requested_current_mA = requested_current_mA_;
     telemetry_.applied_current_mA = command_mA_;
     publishTelemetry();
-
-    // A new motor command wakes this task immediately; otherwise yield Core 0
-    // for roughly 1 ms to Wi-Fi/system work before the next audit/telemetry pass.
     ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(1));
   }
 }
@@ -153,8 +204,8 @@ void Roller485Manager::update() {
 
 bool Roller485Manager::setCurrentMa(int16_t current_mA) {
   if (current_mA == 0) return stop();
-  if (!io_task_running_ || command_queue_ == nullptr || io_task_handle_ == nullptr) {
-    last_error_ = "roller_io_task_not_running";
+  if (!io_task_ready_ || !io_task_running_ || command_queue_ == nullptr || io_task_handle_ == nullptr) {
+    last_error_ = "roller_io_task_not_ready";
     return false;
   }
   if (requested_current_mA_ == current_mA) return true;
@@ -173,19 +224,14 @@ bool Roller485Manager::setCurrentMa(int16_t current_mA) {
 }
 
 bool Roller485Manager::stop() {
-  if (!io_task_running_ || command_queue_ == nullptr || io_task_handle_ == nullptr) {
-    // Before the task starts, only a zero command is allowed and is applied
-    // synchronously for fail-safe setup/teardown.
-    RollerCommand zero;
-    zero.current_mA = 0;
-    zero.requested_us = micros();
-    zero.sequence = ++command_sequence_;
+  // No synchronous Wire fallback is allowed on the control core in V46j.
+  // Before READY, zero is already the only permitted requested state.
+  if (!io_task_ready_ || !io_task_running_ || command_queue_ == nullptr || io_task_handle_ == nullptr) {
     requested_current_mA_ = 0;
-    return applyCurrentMa(zero);
+    return true;
   }
   if (requested_current_mA_ == 0) return true;
 
-  // Stop has priority over any not-yet-applied nonzero request.
   xQueueReset(command_queue_);
   RollerCommand zero;
   zero.current_mA = 0;

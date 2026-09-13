@@ -90,7 +90,7 @@ static constexpr uint32_t MEKF_CONTROL_PREDICTION_FIXED_US = 2500UL;
 static constexpr uint32_t MEKF_CONTROL_PREDICTION_MAX_US = 10000UL;
 static constexpr uint8_t ROLLER_IO_TASK_CORE = 0;
 static constexpr uint8_t ROLLER_IO_TASK_PRIORITY = 4;
-static constexpr uint32_t ROLLER_IO_TASK_STACK_BYTES = 4096UL;
+static constexpr uint32_t ROLLER_IO_TASK_STACK_BYTES = 6144UL;
 static constexpr uint16_t LOG_PERIOD_MS = 20;
 static constexpr uint16_t ROLLER_READ_PERIOD_MS = 20;
 // Actual-current audit only. While a motor command is active, CURRENT_READBACK
@@ -108,7 +108,7 @@ static constexpr uint32_t MADGWICK_SETTLING_MS = 5000UL;
 // Dedicated manual-release capture. The first window is held static by the
 // operator; it is metadata, not a per-run angle-zero operation.
 static constexpr char PASSIVE_CAPTURE_FIRMWARE_REVISION[] = "energy_control_autonomous_v7_side_response_correction_20260904";
-static constexpr char ATTITUDE_VALIDATION_REVISION[] = "v46i_mekf_400hz_dual_core_roller_queue_20260913";
+static constexpr char ATTITUDE_VALIDATION_REVISION[] = "v46j_mekf_dual_core_roller_ready_20260913";
 static constexpr float MEKF_GYRO_Y_SCALE = 0.908911f;
 static constexpr uint32_t PASSIVE_CAPTURE_DURATION_MS = 60000UL;
 static constexpr uint32_t PASSIVE_STATIC_WINDOW_MS = 3000UL;

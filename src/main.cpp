@@ -75,18 +75,18 @@ void setup() {
   Serial.begin(Config::SERIAL_BAUD);
   delay(300);
   Serial.println();
-  Serial.println("AtomS3R V46i MEKF dual-core motor validation");
+  Serial.println("AtomS3R V46j MEKF dual-core motor validation");
 
   auto cfg = M5.config();
   cfg.serial_baudrate = 0;
   cfg.internal_imu = true;
   M5.begin(cfg);
-  Serial.printf("V46i identity: board=%d imu_type=%d M5Unified=%s M5GFX=%s AHRS=%s base=%s attitude=%s\n",
+  Serial.printf("V46j identity: board=%d imu_type=%d M5Unified=%s M5GFX=%s AHRS=%s base=%s attitude=%s\n",
                 static_cast<int>(M5.getBoard()), static_cast<int>(M5.Imu.getType()),
                 Config::RESOLVED_M5UNIFIED_VERSION, Config::RESOLVED_M5GFX_VERSION,
                 Config::RESOLVED_ADAFRUIT_AHRS_VERSION, Config::V62_BASE_COMMIT,
                 Config::ATTITUDE_VALIDATION_REVISION);
-  displayLine("V46i MEKF", "DUAL-CORE V7");
+  displayLine("V46j MEKF", "DUAL-CORE V7");
 
   const bool psram_ok = logger.begin();
   Serial.printf("PSRAM: %s total=%u free=%u sample_capacity=%u\n", psram_ok ? "OK" : "FAILED",
@@ -98,11 +98,10 @@ void setup() {
   Serial.printf("IMU: %s\n", imu_ok ? "OK" : "FAILED");
 
   const bool roller_ok = roller.begin();
-  roller.stop();
   const bool roller_task_ok = roller_ok && roller.startIoTask(
       Config::ROLLER_IO_TASK_CORE, Config::ROLLER_IO_TASK_PRIORITY,
       Config::ROLLER_IO_TASK_STACK_BYTES);
-  Serial.printf("Roller485: %s task=%s core=%u priority=%u\n",
+  Serial.printf("Roller485: %s task_ready=%s core=%u priority=%u\n",
                 roller_ok ? "OK" : "FAILED", roller_task_ok ? "OK" : "FAILED",
                 Config::ROLLER_IO_TASK_CORE, Config::ROLLER_IO_TASK_PRIORITY);
 

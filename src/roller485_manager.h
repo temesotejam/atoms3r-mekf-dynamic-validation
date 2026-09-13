@@ -24,8 +24,10 @@ struct RollerTelemetry {
   bool current_valid = false;
   bool q_meas_observed_valid = false;
 
-  // V46i task-split diagnostics. These are status-only and do not alter RWLOG v46.
+  // V46j task-split diagnostics. These are status-only and do not alter RWLOG v46.
   bool io_task_running = false;
+  bool io_task_ready = false;
+  bool io_task_init_failed = false;
   int16_t requested_current_mA = 0;
   int16_t applied_current_mA = 0;
   uint32_t last_command_latency_us = 0;
@@ -38,6 +40,7 @@ class Roller485Manager {
 public:
   bool begin();
   bool startIoTask(uint8_t core_id, uint8_t priority, uint32_t stack_bytes);
+  bool ioReady() const { return io_task_ready_; }
 
   // Called only by the dedicated Roller I/O task after V46i starts.
   void update();
@@ -60,6 +63,7 @@ private:
 
   static void ioTaskEntry(void* arg);
   void ioTaskLoop();
+  bool initializeIoOwner();
   bool applyCurrentMa(const RollerCommand& cmd);
   void publishTelemetry();
 
@@ -82,6 +86,8 @@ private:
   QueueHandle_t command_queue_ = nullptr;
   TaskHandle_t io_task_handle_ = nullptr;
   volatile bool io_task_running_ = false;
+  volatile bool io_task_ready_ = false;
+  volatile bool io_task_init_failed_ = false;
   volatile int16_t requested_current_mA_ = 0;
   uint32_t command_sequence_ = 0;
 

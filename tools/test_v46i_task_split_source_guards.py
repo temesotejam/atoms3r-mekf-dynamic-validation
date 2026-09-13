@@ -8,30 +8,46 @@ runner = Path('src/experiment_runner.cpp').read_text(encoding='utf-8')
 web = Path('src/web_ui.cpp').read_text(encoding='utf-8')
 manifest = Path('site/manifest.json').read_text(encoding='utf-8')
 
-assert 'v46i_mekf_400hz_dual_core_roller_queue_20260913' in config
+assert 'v46j_mekf_dual_core_roller_ready_20260913' in config
 assert 'ROLLER_IO_TASK_CORE = 0' in config
 assert 'ROLLER_IO_TASK_PRIORITY = 4' in config
-assert 'ROLLER_IO_TASK_STACK_BYTES = 4096UL' in config
-assert 'AtomS3R V46i MEKF dual-core motor validation' in main
+assert 'ROLLER_IO_TASK_STACK_BYTES = 6144UL' in config
+assert 'AtomS3R V46j MEKF dual-core motor validation' in main
 assert 'roller.startIoTask(' in main
+assert 'roller.stop();' not in main
 assert 'roller.update();' not in main
 assert 'if (!runner.running())' in main
 assert 'taskYIELD();' in main
-assert 'xTaskCreatePinnedToCore' in roller_cpp
-assert 'xQueueCreate(4, sizeof(RollerCommand))' in roller_cpp
-assert 'xQueueSend(command_queue_' in roller_cpp
-assert 'xQueueReset(command_queue_)' in roller_cpp
-assert 'xTaskNotifyGive(io_task_handle_)' in roller_cpp
-assert 'ulTaskNotifyTake' in roller_cpp
-assert 'CURRENT_AUDIT_FAST_READ_PERIOD_US' in roller_cpp
-assert 'telemetrySnapshot()' in roller_cpp
-assert 'portENTER_CRITICAL(&telemetry_mux_)' in roller_cpp
+
+# Core 0 owns Wire from initialization onward; control core only queues commands.
+assert 'bool Roller485Manager::initializeIoOwner()' in roller_cpp
+assert 'Wire.begin(Config::I2C_SDA_PIN, Config::I2C_SCL_PIN);' in roller_cpp
+assert roller_cpp.index('Wire.begin(Config::I2C_SDA_PIN, Config::I2C_SCL_PIN);') > roller_cpp.index('bool Roller485Manager::initializeIoOwner()')
+begin_region = roller_cpp[roller_cpp.index('bool Roller485Manager::begin()'):roller_cpp.index('bool Roller485Manager::startIoTask')]
+assert 'Wire.' not in begin_region
+stop_region = roller_cpp[roller_cpp.index('bool Roller485Manager::stop()'):roller_cpp.index('bool Roller485Manager::applyCurrentMa')]
+assert 'Wire.' not in stop_region
+assert 'No synchronous Wire fallback' in stop_region
+
+# Creation is not readiness: startIoTask waits for Core 0 init completion.
+for token in (
+    'io_task_ready_', 'io_task_init_failed_', 'roller_io_task_start_timeout',
+    'roller_io_task_not_ready', 'initializeIoOwner()', 'vTaskDelay(pdMS_TO_TICKS(1))',
+    'xTaskCreatePinnedToCore', 'xQueueCreate(4, sizeof(RollerCommand))',
+    'xQueueSend(command_queue_', 'xQueueReset(command_queue_)',
+    'xTaskNotifyGive(io_task_handle_)', 'ulTaskNotifyTake',
+    'CURRENT_AUDIT_FAST_READ_PERIOD_US', 'telemetrySnapshot()',
+    'portENTER_CRITICAL(&telemetry_mux_)'):
+    assert token in roller_cpp or token in roller_h, token
+
 assert 'Control-core API: queue a desired current; no Roller I2C is performed here.' in roller_h
 assert 'roller_->telemetry()' not in runner
 assert 'roller_->telemetry()' not in web
 assert runner.count('telemetrySnapshot()') >= 2
 assert 'roller_io_task_running' in web
+assert 'roller_io_task_ready' in web
+assert 'roller_io_task_init_failed' in web
 assert 'roller_command_latency_max_us' in web
-assert 'AtomS3R V46i MEKF Motor Validation' in manifest
-assert '"version": "0.46.8"' in manifest
-print('V46i dual-core task split source guards passed')
+assert 'AtomS3R V46j MEKF Motor Validation' in manifest
+assert '"version": "0.46.9"' in manifest
+print('V46j dual-core Roller READY guards passed')
