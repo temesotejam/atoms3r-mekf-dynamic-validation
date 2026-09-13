@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Static guards for the motor-driven V46 attitude-validation path."""
+"""Static guards for the motor-driven V46/V46b attitude-validation path."""
 
 from pathlib import Path
 
@@ -105,11 +105,11 @@ def main() -> None:
     assert "v46b_mekf_upright_reinit_dynamic_beta_compare_20260913" in config
 
     # Startup identity must not claim that this build is motor-off only.
-    assert "V46 MEKF motor-driven dynamic validation" in main_cpp
+    assert "V46b MEKF motor-driven dynamic validation" in main_cpp
     assert "V7 MOTOR VALIDATION" in main_cpp
     assert "motor output OFF" not in main_cpp
 
-    print("V46 motor-driven validation source guards passed")
+    print("V46b motor-driven validation source guards passed")
 
 
 if __name__ == "__main__":
