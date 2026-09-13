@@ -19,6 +19,8 @@ jobs:
         run: grep -R -q "v46_mekf_adopted_dynamic_beta_compare_20260912" src
       - name: Run V46 source guard
         run: python tools/test_current_audit_source_guards.py
+      - name: Run V46 motor-path guard
+        run: python tools/test_v46_motor_validation_source_guards.py
       - name: Run RWLOG v46 regression
         run: python tools/test_rwlog_v46_converter.py
       - name: Check V46 analysis tool
