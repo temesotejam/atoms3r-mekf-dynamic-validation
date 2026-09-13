@@ -1,6 +1,6 @@
 {
-  "name": "AtomS3R V46g MEKF Motor Validation",
-  "version": "0.46.6",
+  "name": "AtomS3R V46h MEKF Motor Validation",
+  "version": "0.46.7",
   "builds": [
     {
       "chipFamily": "ESP32-S3",
