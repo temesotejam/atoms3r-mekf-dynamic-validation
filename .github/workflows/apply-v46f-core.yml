@@ -18,6 +18,7 @@ jobs:
           fetch-depth: 0
       - name: Apply V46f calibrated gyro patch
         run: |
+          # V46f calibrates the sensor input before MEKF prediction.
           python tools/apply_v46f_gyro_calibration_patch.py
           python tools/fix_v46f_guard.py
           git diff --check
