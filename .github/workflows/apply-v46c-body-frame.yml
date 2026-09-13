@@ -1,4 +1,3 @@
-# Triggered one-shot V46c body-frame migration.
 name: apply-v46c-body-frame
 
 on:
@@ -21,65 +20,24 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
-
           p = Path('src/experiment_runner.cpp')
           text = p.read_text(encoding='utf-8')
-
-          old = '''// Match the historical V45 detector coordinate without mixing spatial axes.
-// Accelerometer vectors remain in the raw M5Unified IMU frame so the static
-// pitch remains atan2(-ax,hypot(ay,az)). The MEKF quaternion kinematics use the
-// opposite angular-velocity sign convention to the legacy detector, therefore
-// all three gyro components (and their startup bias) are negated before predict.
-// This keeps a right-handed 3-D frame while making d(pitch)/dt agree with the
-// existing V45 detector convention pitch_rate = -gy.
-mekf6::Vec3 mekfAccelFromRaw(const ImuReading& r) {
-  return {r.ax_g, r.ay_g, r.az_g};
-}
-
-mekf6::Vec3 mekfGyroRadFromRaw(const ImuReading& r) {
-  return {mekf6::degToRad(-r.gx_dps), mekf6::degToRad(-r.gy_dps), mekf6::degToRad(-r.gz_dps)};
-}
-
-mekf6::Vec3 mekfStartupBiasFromRaw(float bx_dps, float by_dps, float bz_dps) {
-  return {mekf6::degToRad(-bx_dps), mekf6::degToRad(-by_dps), mekf6::degToRad(-bz_dps)};
-}
-'''
-          new = '''// AtomS3R is mounted with its raw +Z axis pointing downward in the measured
-// upright pose. Map the raw IMU into the legacy/body frame with a proper 180-deg
-// rotation about +X: R_x(pi)=diag(+1,-1,-1). This keeps the frame right-handed,
-// maps upright gravity from raw -Z to filter +Z, preserves the historical static
-// pitch atan2(-ax,hypot(ay,az)), and gives the required dynamic convention
-// d(pitch)/dt = -raw_gy near upright.
-mekf6::Vec3 mekfAccelFromRaw(const ImuReading& r) {
-  return {r.ax_g, -r.ay_g, -r.az_g};
-}
-
-mekf6::Vec3 mekfGyroRadFromRaw(const ImuReading& r) {
-  return {mekf6::degToRad(r.gx_dps), mekf6::degToRad(-r.gy_dps), mekf6::degToRad(-r.gz_dps)};
-}
-
-mekf6::Vec3 mekfStartupBiasFromRaw(float bx_dps, float by_dps, float bz_dps) {
-  return {mekf6::degToRad(bx_dps), mekf6::degToRad(-by_dps), mekf6::degToRad(-bz_dps)};
-}
-'''
-          assert old in text
-          text = text.replace(old, new, 1)
-
-          old_mean = '''      const mekf6::Vec3 mean_accel{
-          static_cast<float>(g_v46_mekf_run_reinit.ax_sum_g / n),
-          static_cast<float>(g_v46_mekf_run_reinit.ay_sum_g / n),
-          static_cast<float>(g_v46_mekf_run_reinit.az_sum_g / n)};
-'''
-          new_mean = '''      const mekf6::Vec3 mean_accel_raw{
-          static_cast<float>(g_v46_mekf_run_reinit.ax_sum_g / n),
-          static_cast<float>(g_v46_mekf_run_reinit.ay_sum_g / n),
-          static_cast<float>(g_v46_mekf_run_reinit.az_sum_g / n)};
-      // Same R_x(pi) sensor-to-body transform used by updateFilterSeries().
-      const mekf6::Vec3 mean_accel{
-          mean_accel_raw.x, -mean_accel_raw.y, -mean_accel_raw.z};
-'''
+          replacements = {
+              '  return {r.ax_g, r.ay_g, r.az_g};': '  return {r.ax_g, -r.ay_g, -r.az_g};',
+              '  return {mekf6::degToRad(-r.gx_dps), mekf6::degToRad(-r.gy_dps), mekf6::degToRad(-r.gz_dps)};': '  return {mekf6::degToRad(r.gx_dps), mekf6::degToRad(-r.gy_dps), mekf6::degToRad(-r.gz_dps)};',
+              '  return {mekf6::degToRad(-bx_dps), mekf6::degToRad(-by_dps), mekf6::degToRad(-bz_dps)};': '  return {mekf6::degToRad(bx_dps), mekf6::degToRad(-by_dps), mekf6::degToRad(-bz_dps)};',
+          }
+          for old, new in replacements.items():
+              assert old in text, old
+              text = text.replace(old, new, 1)
+          old_mean = '      const mekf6::Vec3 mean_accel{\n          static_cast<float>(g_v46_mekf_run_reinit.ax_sum_g / n),\n          static_cast<float>(g_v46_mekf_run_reinit.ay_sum_g / n),\n          static_cast<float>(g_v46_mekf_run_reinit.az_sum_g / n)};\n'
+          new_mean = '      const mekf6::Vec3 mean_accel_raw{\n          static_cast<float>(g_v46_mekf_run_reinit.ax_sum_g / n),\n          static_cast<float>(g_v46_mekf_run_reinit.ay_sum_g / n),\n          static_cast<float>(g_v46_mekf_run_reinit.az_sum_g / n)};\n      const mekf6::Vec3 mean_accel{\n          mean_accel_raw.x, -mean_accel_raw.y, -mean_accel_raw.z};\n'
           assert old_mean in text
           text = text.replace(old_mean, new_mean, 1)
+          old_comment = '// Match the historical V45 detector coordinate without mixing spatial axes.\n// Accelerometer vectors remain in the raw M5Unified IMU frame so the static\n// pitch remains atan2(-ax,hypot(ay,az)). The MEKF quaternion kinematics use the\n// opposite angular-velocity sign convention to the legacy detector, therefore\n// all three gyro components (and their startup bias) are negated before predict.\n// This keeps a right-handed 3-D frame while making d(pitch)/dt agree with the\n// existing V45 detector convention pitch_rate = -gy.\n'
+          new_comment = '// V46c sensor-to-body adapter: the installed AtomS3R has raw -Z upward at the\n// measured upright pose. Rotate raw IMU vectors 180 deg about +X, R=diag(+1,-1,-1).\n// This maps upright gravity to filter +Z, keeps a right-handed frame, preserves\n// the historical static pitch coordinate, and gives d(pitch)/dt = -raw_gy.\n'
+          assert old_comment in text
+          text = text.replace(old_comment, new_comment, 1)
           p.write_text(text, encoding='utf-8')
 
           c = Path('src/config.h')
@@ -91,7 +49,6 @@ mekf6::Vec3 mekfStartupBiasFromRaw(float bx_dps, float by_dps, float bz_dps) {
           PY
           git diff --check
           grep -q 'return {r.ax_g, -r.ay_g, -r.az_g};' src/experiment_runner.cpp
-          grep -q 'mekf6::degToRad(r.gx_dps), mekf6::degToRad(-r.gy_dps), mekf6::degToRad(-r.gz_dps)' src/experiment_runner.cpp
           grep -q 'mean_accel_raw.x, -mean_accel_raw.y, -mean_accel_raw.z' src/experiment_runner.cpp
           grep -q 'v46c_mekf_rx180_upright_reinit_dynamic_beta_compare_20260913' src/config.h
       - name: Commit V46c frame fix
