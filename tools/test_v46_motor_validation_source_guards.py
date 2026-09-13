@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Static guards for the motor-driven V46e attitude-validation path."""
+"""Static guards for the motor-driven V46h attitude-validation path."""
 
 from pathlib import Path
 
@@ -25,7 +25,9 @@ def main() -> None:
     ):
         assert token in config, token
 
-    # Web start/ESTOP and post-run recovery remain intact.
+    # Web start/ESTOP and post-run recovery remain intact. V46h deliberately
+    # suppresses status.json polling while the run is active, but ESTOP remains
+    # a direct POST and polling resumes after the bounded run/sync window.
     for token in (
         'server_->on("/start-energy-control-autonomous"',
         "runner_->startEnergyControlAutonomousCapture()",
@@ -34,7 +36,9 @@ def main() -> None:
         'runner_->requestEmergencyStop("web_estop")',
         "displayFrozen",
         "refreshInFlight",
-        "if(lastStatus.running){displayFrozen=true;applyFrozenState();return;}",
+        "if(displayFrozen||refreshInFlight)return;",
+        "if(lastStatus.running){displayFrozen=true;applyFrozenState();setTimeout(()=>{displayFrozen=false;refresh();},41000);return;}",
+        "async function postStop(){displayFrozen=false;await post('/stop');}",
         "if(displayFrozen)displayFrozen=false;apply(lastStatus);",
         'json.replace(":nan", ":null")',
         'json.replace(":NaN", ":null")',
@@ -70,14 +74,14 @@ def main() -> None:
     assert "startup_upright_confirmed = true;" in main_cpp
     assert "digitalWrite(Config::SYNC_LED_PIN, LOW);" in main_cpp
 
-    # V46e proper right-handed R_y(pi)=diag(-1,+1,-1) body frame.
+    # Proper right-handed R_y(pi)=diag(-1,+1,-1) body frame.
     assert "return {-r.ax_g, r.ay_g, -r.az_g};" in runner
     assert "r.gy_dps * Config::MEKF_GYRO_Y_SCALE" in runner
     assert "by_dps * Config::MEKF_GYRO_Y_SCALE" in runner
     assert "-mean_accel_raw.x, mean_accel_raw.y, -mean_accel_raw.z" in runner
 
     # No display-only calibration may remain: absolute and control pitch both
-    # originate from the same MEKF state.
+    # originate from the same MEKF posterior; control uses only forward prediction.
     assert "MEKF_VIDEO_OUTPUT_SCALE" not in config
     assert "MEKF_VIDEO_OUTPUT_SIGN" not in config
     assert "status_.pitch_mekf_abs_deg = raw_mekf_pitch_abs_deg_;" in runner
@@ -111,12 +115,12 @@ def main() -> None:
 
     assert "const bool v46_mekf_dynamic_compare = energy_control_autonomous_mode_" in runner
     assert "pitch_madgwick_dynamic_abs_deg" in runner
-    assert "v46g_mekf_400hz_predict_200hz_accel_20260913" in config
-    assert "V46g MEKF motor-driven dynamic validation" in main_cpp
+    assert "v46h_mekf_400hz_web_quiet_predict_20260913" in config
+    assert "V46h MEKF motor-driven dynamic validation" in main_cpp
     assert "V7 MOTOR VALIDATION" in main_cpp
     assert "motor output OFF" not in main_cpp
 
-    print("V46e physical-frame motor validation source guards passed")
+    print("V46h high-rate physical-frame motor validation source guards passed")
 
 
 if __name__ == "__main__":
