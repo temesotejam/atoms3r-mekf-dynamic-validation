@@ -11,6 +11,7 @@ def main() -> None:
     config = (SRC / "config.h").read_text(encoding="utf-8")
     runner = (SRC / "experiment_runner.cpp").read_text(encoding="utf-8")
     web = (SRC / "web_ui.cpp").read_text(encoding="utf-8")
+    roller = (SRC / "roller485_manager.cpp").read_text(encoding="utf-8")
     main_cpp = (SRC / "main.cpp").read_text(encoding="utf-8")
 
     # Frozen V7 motor experiment shape.
@@ -31,12 +32,33 @@ def main() -> None:
     assert 'server_->on("/stop"' in web
     assert 'runner_->requestEmergencyStop("web_estop")' in web
 
+    # The visible page intentionally freezes during a measurement, but polling
+    # must remain parseable and must resume automatically when running becomes
+    # false. V46's intentionally-disabled estimator fields may be NaN inside
+    # firmware but must never escape as invalid JSON numeric tokens.
+    for token in (
+        "displayFrozen",
+        "refreshInFlight",
+        "if(lastStatus.running){displayFrozen=true;applyFrozenState();return;}",
+        "if(displayFrozen)displayFrozen=false;apply(lastStatus);",
+        'json.replace(":nan", ":null")',
+        'json.replace(":NaN", ":null")',
+        'json.replace(":inf", ":null")',
+    ):
+        assert token in web, token
+
     # Actual motor authority remains isolated to explicitly authorized V7 pulses.
     assert "energy_control_autonomous_pulse_live" in runner
     assert "energy_control_autonomous_pulse_authorized_" in runner
     assert "beginEnergyControlAutonomousStartKickPulse" in runner
     assert "beginEnergyControlAutonomousPulse" in runner
     assert "updateEnergyControlAutonomousPulse" in runner
+
+    # Once output is already known off, idle/FINISHED service calls must not
+    # hammer the Roller with redundant zero-current I2C writes. If telemetry
+    # later reports OUTPUT=1, the same stop() path writes zero again.
+    assert "if (command_mA_ == 0 && telemetry_.output_raw == 0) return true;" in roller
+    assert "telemetry_.output_raw = current_mA == 0 ? 0 : 1;" in roller
 
     # MEKF is the adopted controller/detector attitude; dynamic-beta Madgwick is
     # retained only as synchronized comparison data during autonomous capture.
