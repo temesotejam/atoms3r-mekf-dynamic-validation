@@ -46,23 +46,20 @@ mekf6::Config makeMekfConfig() {
   return cfg;
 }
 
-// Match the historical V45 detector coordinate without mixing spatial axes.
-// Accelerometer vectors remain in the raw M5Unified IMU frame so the static
-// pitch remains atan2(-ax,hypot(ay,az)). The MEKF quaternion kinematics use the
-// opposite angular-velocity sign convention to the legacy detector, therefore
-// all three gyro components (and their startup bias) are negated before predict.
-// This keeps a right-handed 3-D frame while making d(pitch)/dt agree with the
-// existing V45 detector convention pitch_rate = -gy.
+// V46c sensor-to-body adapter: the installed AtomS3R has raw -Z upward at the
+// measured upright pose. Rotate raw IMU vectors 180 deg about +X, R=diag(+1,-1,-1).
+// This maps upright gravity to filter +Z, keeps a right-handed frame, preserves
+// the historical static pitch coordinate, and gives d(pitch)/dt = -raw_gy.
 mekf6::Vec3 mekfAccelFromRaw(const ImuReading& r) {
-  return {r.ax_g, r.ay_g, r.az_g};
+  return {r.ax_g, -r.ay_g, -r.az_g};
 }
 
 mekf6::Vec3 mekfGyroRadFromRaw(const ImuReading& r) {
-  return {mekf6::degToRad(-r.gx_dps), mekf6::degToRad(-r.gy_dps), mekf6::degToRad(-r.gz_dps)};
+  return {mekf6::degToRad(r.gx_dps), mekf6::degToRad(-r.gy_dps), mekf6::degToRad(-r.gz_dps)};
 }
 
 mekf6::Vec3 mekfStartupBiasFromRaw(float bx_dps, float by_dps, float bz_dps) {
-  return {mekf6::degToRad(-bx_dps), mekf6::degToRad(-by_dps), mekf6::degToRad(-bz_dps)};
+  return {mekf6::degToRad(bx_dps), mekf6::degToRad(-by_dps), mekf6::degToRad(-bz_dps)};
 }
 }  // namespace
 
@@ -2869,10 +2866,12 @@ void ExperimentRunner::updateStartSync(uint32_t now_ms) {
         return;
       }
 
-      const mekf6::Vec3 mean_accel{
+      const mekf6::Vec3 mean_accel_raw{
           static_cast<float>(g_v46_mekf_run_reinit.ax_sum_g / n),
           static_cast<float>(g_v46_mekf_run_reinit.ay_sum_g / n),
           static_cast<float>(g_v46_mekf_run_reinit.az_sum_g / n)};
+      const mekf6::Vec3 mean_accel{
+          mean_accel_raw.x, -mean_accel_raw.y, -mean_accel_raw.z};
 
       mekf_.reset();
       mekf_.setConfig(makeMekfConfig());
