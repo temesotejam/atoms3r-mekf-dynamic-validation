@@ -17,6 +17,14 @@ jobs:
         run: pip install --upgrade platformio
       - name: Verify V46 validation identity
         run: grep -R -q "v46_mekf_adopted_dynamic_beta_compare_20260912" src
+      - name: Run V46 source guard
+        run: python tools/test_current_audit_source_guards.py
+      - name: Run RWLOG v46 regression
+        run: python tools/test_rwlog_v46_converter.py
+      - name: Run native MEKF dynamics test
+        run: |
+          g++ -std=c++17 -O2 tools/test_mekf_host.cpp src/mekf6.cpp -o /tmp/test_mekf_host
+          /tmp/test_mekf_host
       - name: Build AtomS3R firmware
         run: pio run -e atoms3cam
       - name: Package flash images
