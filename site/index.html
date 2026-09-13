@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#111827">
+  <title>AtomS3R V46 MEKF Motor Validation</title>
+  <link rel="stylesheet" href="styles.css">
+  <script type="module" src="https://unpkg.com/esp-web-tools@10.1.1/dist/web/install-button.js?module"></script>
+</head>
+<body>
+  <main class="shell">
+    <header class="hero">
+      <p class="eyebrow">ATOMS3R / V46 / MOTOR-DRIVEN VALIDATION</p>
+      <h1>MEKF Motor Validation<br><span>Web Flasher</span></h1>
+      <p class="lead">Autonomous Energy Control V7 を実際にモータ駆動しながら、MEKF と dynamic-beta Madgwick を同時記録する V46 ファームウェアです。</p>
+      <div class="badges"><span>ESP32-S3</span><span>RWLOG v46</span><span>MEKF adopted</span><span>Madgwick compare</span></div>
+    </header>
+
+    <section class="panel important">
+      <h2>このページから直接書き込めます</h2>
+      <p>AtomS3R を USB でPCへ接続し、Chrome または Edge のデスクトップ版で下のボタンを押してください。</p>
+      <esp-web-install-button manifest="manifest.json">
+        <button slot="activate" class="primary">AtomS3RへV46を書き込む</button>
+        <span slot="unsupported" class="warning">このブラウザはWeb Serial / WebUSBに対応していません。PC版ChromeまたはEdgeを使用してください。</span>
+      </esp-web-install-button>
+      <details>
+        <summary>デバイスが表示されない場合</summary>
+        <p>AtomS3RをDownload Modeへ入れてから再度ボタンを押してください。書き込み完了後は通常起動してください。</p>
+      </details>
+    </section>
+
+    <section class="panel">
+      <h2>書き込み後の実験</h2>
+      <ol>
+        <li>起動後、gyro calibration と estimator settling の完了を待ちます。</li>
+        <li>Wi-Fi <code>AtomS3CAM_Q1_SHADOW</code> に接続します。</li>
+        <li><code>http://192.168.4.1/</code> を開きます。</li>
+        <li>最初は target <strong>8.0 deg</strong> を選択します。</li>
+        <li>動画撮影を開始し、同期LEDが映るようにします。</li>
+        <li><strong>Start autonomous energy control</strong> を押します。</li>
+        <li>30秒のモータ駆動測定後、RWLOGをダウンロードします。</li>
+      </ol>
+      <p class="hint">開始時に 300 mA / 100 ms のSTART_KICKを1回行い、その後はAutonomous Energy Control V7がゼロクロスごとに入力を選択します。</p>
+    </section>
+
+    <section class="panel">
+      <h2>姿勢推定の比較</h2>
+      <div class="grid">
+        <article><strong>MEKF</strong><p><code>pitch_mekf_abs_deg</code><br>制御・検出に採用。</p></article>
+        <article><strong>Madgwick</strong><p><code>pitch_madgwick_dynamic_abs_deg</code><br>比較専用。</p></article>
+        <article><strong>Accel reject</strong><p><code>mekf_accel_confidence</code><br><code>mekf_accel_used</code></p></article>
+        <article><strong>同期</strong><p>START / MID / END LED anchorsで動画とRWLOGを対応付けます。</p></article>
+      </div>
+    </section>
+
+    <section class="panel safety">
+      <h2>実機動作について</h2>
+      <p>このV46はモータを実際に駆動します。可動部から手・ケーブル・治具を離し、異常時は実験画面の <strong>Emergency stop</strong> を使用してください。</p>
+      <p>Attitude revision: <code>v46_mekf_adopted_dynamic_beta_compare_20260912</code></p>
+    </section>
+
+    <footer>atoms3r-mekf-dynamic-validation / V46</footer>
+  </main>
+</body>
+</html>
