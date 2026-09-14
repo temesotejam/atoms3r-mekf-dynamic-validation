@@ -1,13 +1,8 @@
 name: apply-v46l-fast-solver-shadow
 
+# Historical one-time migration; build.yml/pages.yml run its regression tests.
+# New releases must not reapply the V46k-to-V46l source conversion on push.
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'tools/apply_v46l_fast_solver_shadow.py'
-      - 'tools/fix_v46l_metadata_float_helper.py'
-      - 'tools/test_v46l_fast_solver_shadow.py'
-      - '.github/workflows/apply-v46l-fast-solver-shadow.yml'
   workflow_dispatch:
 
 permissions:
