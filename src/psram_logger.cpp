@@ -149,6 +149,8 @@ void PsramLogger::clear() {
   energy_control_autonomous_peak_event_count_ = 0;
   energy_control_autonomous_zero_cross_event_count_ = 0;
   energy_control_autonomous_event_overflow_ = false;
+  timing_probe_event_count_ = 0;
+  timing_probe_event_overflow_ = false;
   calibration_result_ = CalibrationResult{};
   last_measurement_done_ = false;
 }
@@ -193,6 +195,8 @@ void PsramLogger::startRun(uint16_t run_id, uint64_t run_start_us, int16_t curre
   energy_control_autonomous_peak_event_count_ = 0;
   energy_control_autonomous_zero_cross_event_count_ = 0;
   energy_control_autonomous_event_overflow_ = false;
+  timing_probe_event_count_ = 0;
+  timing_probe_event_overflow_ = false;
   calibration_result_ = CalibrationResult{};
   last_measurement_done_ = false;
 }
@@ -295,6 +299,15 @@ void PsramLogger::addEnergyControlAutonomousZeroCrossEvent(const EnergyControlAu
   EnergyControlAutonomousZeroCrossEvent stored = event;
   stored.event_index = energy_control_autonomous_zero_cross_event_count_ + 1;
   energy_control_autonomous_zero_cross_events_[energy_control_autonomous_zero_cross_event_count_++] = stored;
+}
+void PsramLogger::addTimingProbeEvent(const TimingProbeEvent& event) {
+  if (timing_probe_event_count_ >= kMaxTimingProbeEvents) {
+    timing_probe_event_overflow_ = true;
+    return;
+  }
+  TimingProbeEvent stored = event;
+  stored.event_index = timing_probe_event_count_ + 1;
+  timing_probe_events_[timing_probe_event_count_++] = stored;
 }
 void PsramLogger::setCalibrationResult(const CalibrationResult& result) {
   calibration_result_ = result;
@@ -1298,6 +1311,35 @@ String PsramLogger::buildMetadataJson() const {
     json += ",\"reason\":\"" + String(energyControlV0ReasonName(e.reason)) + "\"";
     json += ",\"reason_code\":" + String(e.reason);
     json += "}";
+  }
+  json += "],";
+  json += "\"v46k_timing_probe_revision\":\"v46k_pulse_start_core1_profile_20260914\",";
+  json += "\"v46k_timing_probe_scope\":\"measurement_only;no_controller_or_motor_decision_reads_timing_values\",";
+  json += "\"v46k_timing_probe_event_overflow\":" + String(timing_probe_event_overflow_ ? "true" : "false") + ",";
+  json += "\"v46k_timing_probe_events\":[";
+  for (uint16_t i = 0; i < timing_probe_event_count_; ++i) {
+    const TimingProbeEvent& e = timing_probe_events_[i];
+    if (i) json += ",";
+    json += "{\"event_index\":" + String(e.event_index);
+    json += ",\"pulse_id\":" + String(e.pulse_id);
+    json += ",\"pulse_kind\":\"" + String(e.pulse_kind == 1 ? "strong_start_kick" : "normal_zero_cross") + "\"";
+    json += ",\"t_test_ms\":" + String(e.t_test_ms);
+    json += ",\"command_mA\":" + String(e.command_mA);
+    json += ",\"pulse_width_ms\":" + String(e.pulse_width_ms);
+    json += ",\"pulse_start_us\":" + String(e.pulse_start_us);
+    json += ",\"gyro_sequence_at_start\":" + String(e.gyro_sequence_at_start);
+    json += ",\"set_current_us\":" + String(e.set_current_us);
+    json += ",\"state_update_us\":" + String(e.state_update_us);
+    json += ",\"current_model_us\":" + String(e.current_model_us);
+    json += ",\"update_pulse_model_us\":" + String(e.update_pulse_model_us);
+    json += ",\"pulse_begin_total_us\":" + String(e.pulse_begin_total_us);
+    json += ",\"first_audit_log_offset_us\":" + String(e.first_audit_log_offset_us);
+    json += ",\"first_audit_log_us\":" + String(e.first_audit_log_us);
+    json += ",\"imu_update_call_us\":" + String(e.imu_update_call_us);
+    json += ",\"runner_update_call_us\":" + String(e.runner_update_call_us);
+    json += ",\"core1_path_us\":" + String(e.core1_path_us);
+    json += ",\"first_imu_dt_after_start_us\":" + String(e.first_imu_dt_after_start_us);
+    json += ",\"first_imu_sample_offset_us\":" + String(e.first_imu_sample_offset_us) + "}";
   }
   json += "],";
   json += "\"energy_control_autonomous_peak_events\":[";

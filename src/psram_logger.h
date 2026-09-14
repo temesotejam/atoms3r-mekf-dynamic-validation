@@ -457,6 +457,7 @@ class PsramLogger {
   static constexpr uint16_t kMaxQIdentEvents = Config::Q_IDENT_MAX_EVENTS;
   static constexpr uint16_t kMaxEnergyControlV0Events = Config::ENERGY_CONTROL_V0_MAX_EVENTS;
   static constexpr uint16_t kMaxEnergyControlAutonomousEvents = Config::ENERGY_CONTROL_AUTONOMOUS_MAX_EVENTS;
+  static constexpr uint16_t kMaxTimingProbeEvents = 96;
   bool begin();
   void clear();
   void startRun(uint16_t run_id, uint64_t run_start_us, int16_t current_mA, uint16_t pulse_width_ms,
@@ -477,7 +478,30 @@ class PsramLogger {
   void addQIdentEvent(const QIdentEvent& event);
   void addEnergyControlV0Event(const EnergyControlV0Event& event);
   void addEnergyControlAutonomousPeakEvent(const EnergyControlAutonomousPeakEvent& event);
+  struct TimingProbeEvent {
+    uint16_t event_index = 0;
+    uint32_t pulse_id = 0;
+    uint8_t pulse_kind = 0;  // 1=strong_start_kick, 2=normal_zero_cross.
+    uint32_t t_test_ms = 0;
+    int16_t command_mA = 0;
+    uint16_t pulse_width_ms = 0;
+    uint32_t pulse_start_us = 0;
+    uint32_t gyro_sequence_at_start = 0;
+    uint32_t set_current_us = 0;
+    uint32_t state_update_us = 0;
+    uint32_t current_model_us = 0;
+    uint32_t update_pulse_model_us = 0;
+    uint32_t pulse_begin_total_us = 0;
+    uint32_t first_audit_log_offset_us = 0;
+    uint32_t first_audit_log_us = 0;
+    uint32_t imu_update_call_us = 0;
+    uint32_t runner_update_call_us = 0;
+    uint32_t core1_path_us = 0;
+    uint32_t first_imu_dt_after_start_us = 0;
+    uint32_t first_imu_sample_offset_us = 0;
+  };
   void addEnergyControlAutonomousZeroCrossEvent(const EnergyControlAutonomousZeroCrossEvent& event);
+  void addTimingProbeEvent(const TimingProbeEvent& event);
   bool energyControlAutonomousEventCapacityReached() const {
     return energy_control_autonomous_peak_event_count_ >= kMaxEnergyControlAutonomousEvents ||
         energy_control_autonomous_zero_cross_event_count_ >= kMaxEnergyControlAutonomousEvents;
@@ -567,6 +591,9 @@ private:
   EnergyControlAutonomousZeroCrossEvent energy_control_autonomous_zero_cross_events_[kMaxEnergyControlAutonomousEvents] = {};
   uint16_t energy_control_autonomous_zero_cross_event_count_ = 0;
   bool energy_control_autonomous_event_overflow_ = false;
+  TimingProbeEvent timing_probe_events_[kMaxTimingProbeEvents] = {};
+  uint16_t timing_probe_event_count_ = 0;
+  bool timing_probe_event_overflow_ = false;
   CalibrationResult calibration_result_;
   bool last_measurement_done_ = false;
   bool downloading_ = false;

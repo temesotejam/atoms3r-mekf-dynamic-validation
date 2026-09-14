@@ -75,18 +75,18 @@ void setup() {
   Serial.begin(Config::SERIAL_BAUD);
   delay(300);
   Serial.println();
-  Serial.println("AtomS3R V46j MEKF dual-core motor validation");
+  Serial.println("AtomS3R V46k MEKF dual-core motor validation");
 
   auto cfg = M5.config();
   cfg.serial_baudrate = 0;
   cfg.internal_imu = true;
   M5.begin(cfg);
-  Serial.printf("V46j identity: board=%d imu_type=%d M5Unified=%s M5GFX=%s AHRS=%s base=%s attitude=%s\n",
+  Serial.printf("V46k identity: board=%d imu_type=%d M5Unified=%s M5GFX=%s AHRS=%s base=%s attitude=%s\n",
                 static_cast<int>(M5.getBoard()), static_cast<int>(M5.Imu.getType()),
                 Config::RESOLVED_M5UNIFIED_VERSION, Config::RESOLVED_M5GFX_VERSION,
                 Config::RESOLVED_ADAFRUIT_AHRS_VERSION, Config::V62_BASE_COMMIT,
                 Config::ATTITUDE_VALIDATION_REVISION);
-  displayLine("V46j MEKF", "DUAL-CORE V7");
+  displayLine("V46k MEKF", "DUAL-CORE V7");
 
   const bool psram_ok = logger.begin();
   Serial.printf("PSRAM: %s total=%u free=%u sample_capacity=%u\n", psram_ok ? "OK" : "FAILED",
@@ -120,8 +120,20 @@ void loop() {
   // Roller485 I2C/current audit is owned by the dedicated Core 0 task.
   runner.serviceFast();
   runner.updateImuDynamicBetaContext();
-  imu.update();
-  runner.update();
+  const bool v46k_timing_probe_active = runner.energyControlAutonomousMode() && runner.running();
+  if (v46k_timing_probe_active) {
+    const uint32_t imu_t0_us = micros();
+    imu.update();
+    const uint32_t imu_update_us = static_cast<uint32_t>(micros() - imu_t0_us);
+    const uint32_t runner_t0_us = micros();
+    runner.update();
+    const uint32_t runner_update_us = static_cast<uint32_t>(micros() - runner_t0_us);
+    runner.recordTimingProbeLoop(imu_update_us, runner_update_us,
+                                 static_cast<uint32_t>(micros() - loop_start_us));
+  } else {
+    imu.update();
+    runner.update();
+  }
 
   // Display/button servicing is unnecessary during the measurement itself.
   if (!runner.running()) {

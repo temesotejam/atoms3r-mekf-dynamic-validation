@@ -130,6 +130,14 @@ void ExperimentRunner::update() {
 
   const ImuReading& r = imu_->reading();
   if (r.gyro_sequence != 0 && r.gyro_sequence != last_imu_update_us_) {
+    if (timing_probe_pending_ && !timing_probe_imu_captured_ &&
+        r.gyro_sequence != timing_probe_event_.gyro_sequence_at_start) {
+      timing_probe_event_.first_imu_dt_after_start_us = r.gyro_update_dt_us;
+      timing_probe_event_.first_imu_sample_offset_us = r.last_gyro_update_us == 0 ? 0 :
+          static_cast<uint32_t>(r.last_gyro_update_us - timing_probe_event_.pulse_start_us);
+      timing_probe_imu_captured_ = true;
+      maybeFinalizeTimingProbe();
+    }
     updateFilterSeries(r);
     updateDisplayedAngles(r);
     if (status_.state == ExperimentState::STARTUP_GYRO_CALIB) updateStartupCalibration(r);
@@ -2260,14 +2268,20 @@ bool ExperimentRunner::beginEnergyControlAutonomousPulse(uint32_t now_ms, uint32
           EnergyControlAutonomousHalfCycleState::WAIT_ZERO_CROSS) {
     return false;
   }
+  const uint32_t begin_t0_us = micros();
   energy_control_autonomous_pulse_authorized_ = true;
   const int16_t command_current_mA = static_cast<int16_t>(
       direction * Config::ENERGY_CONTROL_AUTONOMOUS_CURRENT_MA);
-  if (!roller_->setCurrentMa(command_current_mA)) {
+  const uint32_t set_current_t0_us = micros();
+  const bool set_current_ok = roller_->setCurrentMa(command_current_mA);
+  const uint32_t set_current_us = static_cast<uint32_t>(micros() - set_current_t0_us);
+  if (!set_current_ok) {
     energy_control_autonomous_pulse_authorized_ = false;
     stopMotor();
     return false;
   }
+
+  const uint32_t state_t0_us = micros();
   status_.current_mA_setting = Config::ENERGY_CONTROL_AUTONOMOUS_CURRENT_MA;
   status_.pulse_width_ms_setting = pulse_width_ms;
   status_.motor_cmd_mA = command_current_mA;
@@ -2277,6 +2291,10 @@ bool ExperimentRunner::beginEnergyControlAutonomousPulse(uint32_t now_ms, uint32
   status_.pulse_id++;
   active_pulse_start_ms_ = now_ms;
   active_pulse_start_test_ms_ = t_test_ms;
+  const uint32_t pulse_start_us = micros();
+  const uint32_t state_update_us = static_cast<uint32_t>(pulse_start_us - state_t0_us);
+
+  const uint32_t model_t0_us = micros();
   const float i0 = predicted_current_end_ms_ == 0 ? 0.0f :
       predicted_signed_current_end_mA_ * expf(-static_cast<float>(now_ms - predicted_current_end_ms_) / 70.0f);
   const float v = status_.beta_model_vbat_mV > 0 ? status_.beta_model_vbat_mV / 1000.0f :
@@ -2288,7 +2306,15 @@ bool ExperimentRunner::beginEnergyControlAutonomousPulse(uint32_t now_ms, uint32
   predicted_signed_current_end_mA_ = target_current_mA +
       (i0 - target_current_mA) * expf(-width_s / tau_s);
   predicted_current_end_ms_ = now_ms + pulse_width_ms;
+  const uint32_t current_model_us = static_cast<uint32_t>(micros() - model_t0_us);
+
+  const uint32_t pulse_model_t0_us = micros();
   updatePulseModelPrediction();
+  const uint32_t update_pulse_model_us = static_cast<uint32_t>(micros() - pulse_model_t0_us);
+  const uint32_t total_us = static_cast<uint32_t>(micros() - begin_t0_us);
+  startTimingProbe(2, t_test_ms, command_current_mA, pulse_width_ms, pulse_start_us,
+                   set_current_us, state_update_us, current_model_us,
+                   update_pulse_model_us, total_us);
   return true;
 }
 bool ExperimentRunner::beginEnergyControlAutonomousStartKickPulse(uint32_t now_ms, int8_t direction) {
@@ -2297,14 +2323,20 @@ bool ExperimentRunner::beginEnergyControlAutonomousStartKickPulse(uint32_t now_m
       status_.emergency_stop || status_.state != ExperimentState::RUNNING_BATCH_SWEEP ||
       status_.pulse_active || !roller_ || !roller_->ok() ||
       direction != Config::ENERGY_CONTROL_AUTONOMOUS_START_KICK_DIRECTION) return false;
+  const uint32_t begin_t0_us = micros();
   energy_control_autonomous_pulse_authorized_ = true;
   const int16_t command_current_mA = static_cast<int16_t>(
       direction * Config::ENERGY_CONTROL_AUTONOMOUS_START_KICK_CURRENT_MA);
-  if (!roller_->setCurrentMa(command_current_mA)) {
+  const uint32_t set_current_t0_us = micros();
+  const bool set_current_ok = roller_->setCurrentMa(command_current_mA);
+  const uint32_t set_current_us = static_cast<uint32_t>(micros() - set_current_t0_us);
+  if (!set_current_ok) {
     energy_control_autonomous_pulse_authorized_ = false;
     stopMotor();
     return false;
   }
+
+  const uint32_t state_t0_us = micros();
   status_.current_mA_setting = Config::ENERGY_CONTROL_AUTONOMOUS_START_KICK_CURRENT_MA;
   status_.pulse_width_ms_setting = Config::ENERGY_CONTROL_AUTONOMOUS_START_KICK_PULSE_MS;
   status_.motor_cmd_mA = command_current_mA;
@@ -2313,6 +2345,10 @@ bool ExperimentRunner::beginEnergyControlAutonomousStartKickPulse(uint32_t now_m
   status_.pulse_id++;
   active_pulse_start_ms_ = now_ms;
   active_pulse_start_test_ms_ = 0;
+  const uint32_t pulse_start_us = micros();
+  const uint32_t state_update_us = static_cast<uint32_t>(pulse_start_us - state_t0_us);
+
+  const uint32_t model_t0_us = micros();
   const float i0 = predicted_current_end_ms_ == 0 ? 0.0f :
       predicted_signed_current_end_mA_ * expf(-static_cast<float>(now_ms - predicted_current_end_ms_) / 70.0f);
   const float v = status_.beta_model_vbat_mV > 0 ? status_.beta_model_vbat_mV / 1000.0f :
@@ -2324,7 +2360,16 @@ bool ExperimentRunner::beginEnergyControlAutonomousStartKickPulse(uint32_t now_m
   predicted_signed_current_end_mA_ = target_current_mA +
       (i0 - target_current_mA) * expf(-width_s / tau_s);
   predicted_current_end_ms_ = now_ms + Config::ENERGY_CONTROL_AUTONOMOUS_START_KICK_PULSE_MS;
+  const uint32_t current_model_us = static_cast<uint32_t>(micros() - model_t0_us);
+
+  const uint32_t pulse_model_t0_us = micros();
   updatePulseModelPrediction();
+  const uint32_t update_pulse_model_us = static_cast<uint32_t>(micros() - pulse_model_t0_us);
+  const uint32_t total_us = static_cast<uint32_t>(micros() - begin_t0_us);
+  startTimingProbe(1, 0, command_current_mA,
+                   Config::ENERGY_CONTROL_AUTONOMOUS_START_KICK_PULSE_MS, pulse_start_us,
+                   set_current_us, state_update_us, current_model_us,
+                   update_pulse_model_us, total_us);
   return true;
 }
 void ExperimentRunner::beginEnergyControlAutonomousStartKick(uint32_t now_ms) {
@@ -2778,6 +2823,49 @@ void ExperimentRunner::updateEnergyControlAutonomousAtZeroCross(uint32_t t_test_
   event.reason = Config::ENERGY_CONTROL_AUTONOMOUS_REASON_NONE;
   logger_->addEnergyControlAutonomousZeroCrossEvent(event);
 }
+void ExperimentRunner::startTimingProbe(uint8_t pulse_kind, uint32_t t_test_ms,
+                                              int16_t command_mA, uint16_t pulse_width_ms,
+                                              uint32_t pulse_start_us, uint32_t set_current_us,
+                                              uint32_t state_update_us, uint32_t current_model_us,
+                                              uint32_t update_pulse_model_us,
+                                              uint32_t pulse_begin_total_us) {
+  if (!logger_ || !energy_control_autonomous_mode_ || timing_probe_pending_) return;
+  timing_probe_event_ = PsramLogger::TimingProbeEvent{};
+  timing_probe_event_.pulse_id = status_.pulse_id;
+  timing_probe_event_.pulse_kind = pulse_kind;
+  timing_probe_event_.t_test_ms = t_test_ms;
+  timing_probe_event_.command_mA = command_mA;
+  timing_probe_event_.pulse_width_ms = pulse_width_ms;
+  timing_probe_event_.pulse_start_us = pulse_start_us;
+  timing_probe_event_.gyro_sequence_at_start = imu_ ? imu_->reading().gyro_sequence : 0;
+  timing_probe_event_.set_current_us = set_current_us;
+  timing_probe_event_.state_update_us = state_update_us;
+  timing_probe_event_.current_model_us = current_model_us;
+  timing_probe_event_.update_pulse_model_us = update_pulse_model_us;
+  timing_probe_event_.pulse_begin_total_us = pulse_begin_total_us;
+  timing_probe_pending_ = true;
+  timing_probe_loop_captured_ = false;
+  timing_probe_log_captured_ = false;
+  timing_probe_imu_captured_ = false;
+}
+
+void ExperimentRunner::recordTimingProbeLoop(uint32_t imu_update_us, uint32_t runner_update_us,
+                                               uint32_t core1_path_us) {
+  if (!timing_probe_pending_ || timing_probe_loop_captured_) return;
+  timing_probe_event_.imu_update_call_us = imu_update_us;
+  timing_probe_event_.runner_update_call_us = runner_update_us;
+  timing_probe_event_.core1_path_us = core1_path_us;
+  timing_probe_loop_captured_ = true;
+  maybeFinalizeTimingProbe();
+}
+
+void ExperimentRunner::maybeFinalizeTimingProbe() {
+  if (!timing_probe_pending_ || !timing_probe_loop_captured_ ||
+      !timing_probe_log_captured_ || !timing_probe_imu_captured_ || !logger_) return;
+  logger_->addTimingProbeEvent(timing_probe_event_);
+  timing_probe_pending_ = false;
+}
+
 void ExperimentRunner::captureAngleOffsets() {
   offset_mekf_pitch_deg_ = raw_mekf_pitch_abs_deg_;
   offset_beta1_raw_deg_ = raw_beta1_raw_pitch_deg_;
@@ -5226,7 +5314,17 @@ void ExperimentRunner::logSampleIfDue() {
   const uint32_t period_us = status_.pulse_active
       ? Config::CURRENT_AUDIT_LOG_PERIOD_US : Config::LOG_PERIOD_MS * 1000UL;
   if (last_log_us_ != 0 && static_cast<uint32_t>(now_us - last_log_us_) < period_us) return;
+  const bool probe_log = timing_probe_pending_ && !timing_probe_log_captured_ &&
+      status_.pulse_active && status_.pulse_id == timing_probe_event_.pulse_id;
+  const uint32_t log_start_us = probe_log ? micros() : 0;
   logSampleNow();
+  if (probe_log) {
+    timing_probe_event_.first_audit_log_offset_us =
+        static_cast<uint32_t>(log_start_us - timing_probe_event_.pulse_start_us);
+    timing_probe_event_.first_audit_log_us = static_cast<uint32_t>(micros() - log_start_us);
+    timing_probe_log_captured_ = true;
+    maybeFinalizeTimingProbe();
+  }
 }
 
 void ExperimentRunner::logSampleNow() {

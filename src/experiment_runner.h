@@ -119,6 +119,7 @@ public:
   void update();
   void updateImuDynamicBetaContext();
   void setLoopDt(uint32_t dt_us) { status_.loop_dt_us = dt_us; }
+  void recordTimingProbeLoop(uint32_t imu_update_us, uint32_t runner_update_us, uint32_t core1_path_us);
 
   bool startBatchSweepTest();
   bool startSingleTrialTest(uint8_t trial_number);
@@ -387,6 +388,12 @@ private:
                          uint16_t* width_ms, float* q_effective_pred_mA_s) const;
   bool beginQIdentPulse(uint32_t now_ms, uint32_t t_test_ms, int8_t direction,
                         uint16_t pulse_width_ms);
+  void startTimingProbe(uint8_t pulse_kind, uint32_t t_test_ms, int16_t command_mA,
+                        uint16_t pulse_width_ms, uint32_t pulse_start_us,
+                        uint32_t set_current_us, uint32_t state_update_us,
+                        uint32_t current_model_us, uint32_t update_pulse_model_us,
+                        uint32_t pulse_begin_total_us);
+  void maybeFinalizeTimingProbe();
   void logSampleIfDue();
   void logSampleNow();
   void finishRun();
@@ -504,7 +511,13 @@ private:
   float energy_control_autonomous_pending_q_command_mA_s_ = 0.0f;
   bool energy_control_autonomous_pending_saturated_upper_ = false;
   bool energy_control_autonomous_pending_saturated_lower_ = false;
-  uint16_t energy_control_autonomous_pending_zero_event_index_ = 0;  uint32_t next_pulse_start_test_ms_ = 0;  uint32_t active_pulse_start_ms_ = 0;
+  uint16_t energy_control_autonomous_pending_zero_event_index_ = 0;
+  PsramLogger::TimingProbeEvent timing_probe_event_{};
+  bool timing_probe_pending_ = false;
+  bool timing_probe_loop_captured_ = false;
+  bool timing_probe_log_captured_ = false;
+  bool timing_probe_imu_captured_ = false;
+  uint32_t next_pulse_start_test_ms_ = 0;  uint32_t active_pulse_start_ms_ = 0;
   uint32_t active_pulse_start_test_ms_ = 0;
   bool passive_capture_mode_ = false;
   uint32_t last_pulse_end_ms_ = 0;
