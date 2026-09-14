@@ -1,71 +1,58 @@
 name: build
-
 on:
   push:
     branches: [main, "feature/**"]
   pull_request:
-
+permissions:
+  contents: read
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   platformio:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.x"
-      - name: Install PlatformIO
-        run: pip install --upgrade platformio
-      - name: Verify V46l validation identity
-        run: grep -R -q "v46l_fast_solver_shadow_20260914" src
-      - name: Run V46 source guard
-        run: python tools/test_current_audit_source_guards.py
-      - name: Run V46 motor-path guard
-        run: python tools/test_v46_motor_validation_source_guards.py
-      - name: Run V46 high-rate guard
-        run: python tools/test_v46g_highrate_source_guards.py
-      - name: Run V46 task/recovery guard
-        run: python tools/test_v46i_task_split_source_guards.py
-      - name: Run inherited V46k timing-probe guard
-        run: python tools/test_v46k_timing_probe_source_guards.py
-      - name: Run V46l fast-solver shadow guard
-        run: python tools/test_v46l_fast_solver_shadow.py
-      - name: Run RWLOG v46 regression
-        run: python tools/test_rwlog_v46_converter.py
-      - name: Check V46 analysis tool
-        run: python -m py_compile tools/analyze_v46_attitude_validation.py
-      - name: Run native MEKF dynamics test
+          python-version: "3.11"
+      - name: Verify retained baseline and IMU ownership
+        run: python tools/test_v46n_acquisition_source.py
+      - name: Run native acquisition accounting tests
         run: |
-          g++ -std=c++17 -O2 tools/test_mekf_host.cpp src/mekf6.cpp -o /tmp/test_mekf_host
-          /tmp/test_mekf_host
-      - name: Build AtomS3R firmware
+          g++ -std=c++11 -O2 tools/test_v46n_acquisition.cpp -o /tmp/test_acq
+          /tmp/test_acq
+      - name: Run all inherited control and format guards
+        run: |
+          python tools/test_current_audit_source_guards.py
+          python tools/test_v46_motor_validation_source_guards.py
+          python tools/test_v46g_highrate_source_guards.py
+          python tools/test_v46i_task_split_source_guards.py
+          python tools/test_v46k_timing_probe_source_guards.py
+          python tools/test_v46l_fast_solver_shadow.py
+          python tools/test_rwlog_v46_converter.py
+          g++ -std=c++17 -O2 tools/test_mekf_host.cpp src/mekf6.cpp -o /tmp/test_mekf
+          /tmp/test_mekf
+      - name: Install PlatformIO
+        run: pip install platformio
+      - name: Build motor-driven V46n firmware
         run: pio run -e atoms3cam
       - name: Package flash images
         run: |
           set -euxo pipefail
           mkdir -p dist
-          cp .pio/build/atoms3cam/bootloader.bin dist/bootloader.bin
-          cp .pio/build/atoms3cam/partitions.bin dist/partitions.bin
-          cp "$HOME/.platformio/packages/framework-arduinoespressif32/tools/partitions/boot_app0.bin" dist/boot_app0.bin
-          cp .pio/build/atoms3cam/firmware.bin dist/firmware.bin
-          python "$HOME/.platformio/packages/tool-esptoolpy/esptool.py" --chip esp32s3 merge_bin \
-            -o dist/merged-firmware.bin \
-            0x0000 dist/bootloader.bin \
-            0x8000 dist/partitions.bin \
-            0xe000 dist/boot_app0.bin \
-            0x10000 dist/firmware.bin
-          printf '%s\n' \
-            'AtomS3R V46l MEKF 400Hz gyro / 200Hz accel / legacy-control + fast-solver shadow validation' \
-            '0x0000  bootloader.bin' \
-            '0x8000  partitions.bin' \
-            '0xe000  boot_app0.bin' \
-            '0x10000 firmware.bin' \
-            'merged-firmware.bin: write at 0x0000' \
-            > dist/FLASH_LAYOUT.txt
-          (cd dist && sha256sum bootloader.bin partitions.bin boot_app0.bin firmware.bin merged-firmware.bin > SHA256SUMS.txt)
-      - name: Upload flashable V46l diagnostic firmware
-        uses: actions/upload-artifact@v4
+          cp .pio/build/atoms3cam/{bootloader.bin,partitions.bin,firmware.bin,firmware.elf} dist/
+          cp "$HOME/.platformio/packages/framework-arduinoespressif32/tools/partitions/boot_app0.bin" dist/
+          python "$HOME/.platformio/packages/tool-esptoolpy/esptool.py" --chip esp32s3 merge_bin -o dist/merged-firmware.bin 0x0000 dist/bootloader.bin 0x8000 dist/partitions.bin 0xe000 dist/boot_app0.bin 0x10000 dist/firmware.bin
+          printf '%s\n' "$GITHUB_SHA" > dist/build-sha.txt
+          printf '%s\n' 'V46n 0.46.13; merged-firmware.bin at 0x0000; real V7 motor controller retained' > dist/FLASH_LAYOUT.txt
+          (cd dist && sha256sum *.bin > SHA256SUMS.txt)
+          git diff --exit-code
+      - uses: actions/upload-artifact@v4
         with:
-          name: atoms3r-v46l-fast-solver-shadow-${{ github.sha }}
+          name: atoms3r-v46n-${{ github.sha }}
           path: dist/
           if-no-files-found: error
           retention-days: 30
