@@ -457,7 +457,7 @@ class PsramLogger {
   static constexpr uint16_t kMaxQIdentEvents = Config::Q_IDENT_MAX_EVENTS;
   static constexpr uint16_t kMaxEnergyControlV0Events = Config::ENERGY_CONTROL_V0_MAX_EVENTS;
   static constexpr uint16_t kMaxEnergyControlAutonomousEvents = Config::ENERGY_CONTROL_AUTONOMOUS_MAX_EVENTS;
-  static constexpr uint16_t kMaxTimingProbeEvents = 96;
+  static constexpr uint16_t kMaxTimingProbeEvents = Config::ENERGY_CONTROL_AUTONOMOUS_MAX_EVENTS;
   bool begin();
   void clear();
   void startRun(uint16_t run_id, uint64_t run_start_us, int16_t current_mA, uint16_t pulse_width_ms,
