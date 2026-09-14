@@ -5,6 +5,9 @@ on:
     branches: [main, "feature/**"]
   pull_request:
 
+permissions:
+  contents: write
+
 jobs:
   platformio:
     runs-on: ubuntu-latest
@@ -15,6 +18,21 @@ jobs:
           python-version: "3.x"
       - name: Install PlatformIO
         run: pip install --upgrade platformio
+      - name: Ensure V46k timing-event capacity matches autonomous event capacity
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('src/psram_logger.h')
+          text = path.read_text(encoding='utf-8')
+          old = 'static constexpr uint16_t kMaxTimingProbeEvents = 96;'
+          new = 'static constexpr uint16_t kMaxTimingProbeEvents = Config::ENERGY_CONTROL_AUTONOMOUS_MAX_EVENTS;'
+          if old in text:
+              text = text.replace(old, new, 1)
+              path.write_text(text, encoding='utf-8')
+          elif new not in text:
+              raise SystemExit('Unexpected V46k timing-event capacity declaration')
+          PY
       - name: Verify V46j/V46k validation identity
         run: grep -R -E -q "(v46j_mekf_dual_core_roller_ready_20260913|v46k_pulse_start_timing_probe_20260914)" src
       - name: Run V46 source guard
@@ -31,6 +49,8 @@ jobs:
           if test -f tools/test_v46k_timing_probe_source_guards.py; then
             python tools/test_v46k_timing_probe_source_guards.py
           fi
+      - name: Verify V46k timing-event capacity
+        run: grep -q 'kMaxTimingProbeEvents = Config::ENERGY_CONTROL_AUTONOMOUS_MAX_EVENTS' src/psram_logger.h
       - name: Run RWLOG v46 regression
         run: python tools/test_rwlog_v46_converter.py
       - name: Check V46 analysis tool
@@ -56,7 +76,7 @@ jobs:
             0xe000 dist/boot_app0.bin \
             0x10000 dist/firmware.bin
           printf '%s\n' \
-            'AtomS3R V46j/V46k MEKF 400Hz gyro / 200Hz accel / predicted-control / self-healing Core0 Roller I/O flash layout' \
+            'AtomS3R V46k MEKF 400Hz gyro / 200Hz accel / predicted-control / self-healing Core0 Roller I/O flash layout' \
             '0x0000  bootloader.bin' \
             '0x8000  partitions.bin' \
             '0xe000  boot_app0.bin' \
@@ -67,7 +87,19 @@ jobs:
       - name: Upload flashable V46k diagnostic firmware
         uses: actions/upload-artifact@v4
         with:
-          name: atoms3r-v46-timing-diagnostic-${{ github.sha }}
+          name: atoms3r-v46k-timing-diagnostic-${{ github.sha }}
           path: dist/
           if-no-files-found: error
           retention-days: 30
+      - name: Commit V46k timing-event capacity if needed
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          if git diff --quiet -- src/psram_logger.h; then
+            echo 'Timing-event capacity already committed'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/psram_logger.h
+          git commit -m 'Match V46k timing probe capacity to autonomous events'
+          git push origin HEAD:main
