@@ -18,20 +18,97 @@ jobs:
           python-version: "3.x"
       - name: Install PlatformIO
         run: pip install --upgrade platformio
-      - name: Ensure V46k timing-event capacity matches autonomous event capacity
+      - name: Apply V46k probe-state robustness patch
         shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
-          path = Path('src/psram_logger.h')
-          text = path.read_text(encoding='utf-8')
-          old = 'static constexpr uint16_t kMaxTimingProbeEvents = 96;'
-          new = 'static constexpr uint16_t kMaxTimingProbeEvents = Config::ENERGY_CONTROL_AUTONOMOUS_MAX_EVENTS;'
-          if old in text:
-              text = text.replace(old, new, 1)
-              path.write_text(text, encoding='utf-8')
-          elif new not in text:
-              raise SystemExit('Unexpected V46k timing-event capacity declaration')
+
+          def replace_once(path, old, new, already=None):
+              p = Path(path)
+              text = p.read_text(encoding='utf-8')
+              if old in text:
+                  if text.count(old) != 1:
+                      raise SystemExit(f'{path}: expected one patch marker, found {text.count(old)}')
+                  text = text.replace(old, new, 1)
+                  p.write_text(text, encoding='utf-8')
+                  return
+              if already and already in text:
+                  return
+              raise SystemExit(f'{path}: patch marker missing')
+
+          replace_once(
+              'src/psram_logger.h',
+              '    uint32_t first_imu_dt_after_start_us = 0;\n'
+              '    uint32_t first_imu_sample_offset_us = 0;\n'
+              '  };',
+              '    uint32_t first_imu_dt_after_start_us = 0;\n'
+              '    uint32_t first_imu_sample_offset_us = 0;\n'
+              '    uint8_t capture_mask = 0;  // bit0=Core1 loop, bit1=2ms audit log, bit2=fresh gyro.\n'
+              '    bool complete = false;\n'
+              '  };',
+              '    uint8_t capture_mask = 0;  // bit0=Core1 loop, bit1=2ms audit log, bit2=fresh gyro.\n'
+          )
+
+          replace_once(
+              'src/experiment_runner.cpp',
+              'void ExperimentRunner::resetEnergyControlAutonomous() {\n'
+              '  energy_control_autonomous_pulse_authorized_ = false;',
+              'void ExperimentRunner::resetEnergyControlAutonomous() {\n'
+              '  timing_probe_event_ = PsramLogger::TimingProbeEvent{};\n'
+              '  timing_probe_pending_ = false;\n'
+              '  timing_probe_loop_captured_ = false;\n'
+              '  timing_probe_log_captured_ = false;\n'
+              '  timing_probe_imu_captured_ = false;\n'
+              '  energy_control_autonomous_pulse_authorized_ = false;',
+              'void ExperimentRunner::resetEnergyControlAutonomous() {\n'
+              '  timing_probe_event_ = PsramLogger::TimingProbeEvent{};\n'
+          )
+
+          replace_once(
+              'src/experiment_runner.cpp',
+              'void ExperimentRunner::maybeFinalizeTimingProbe() {\n'
+              '  if (!timing_probe_pending_ || !timing_probe_loop_captured_ ||\n'
+              '      !timing_probe_log_captured_ || !timing_probe_imu_captured_ || !logger_) return;\n'
+              '  logger_->addTimingProbeEvent(timing_probe_event_);\n'
+              '  timing_probe_pending_ = false;\n'
+              '}',
+              'void ExperimentRunner::maybeFinalizeTimingProbe() {\n'
+              '  if (!timing_probe_pending_ || !logger_) return;\n'
+              '  timing_probe_event_.capture_mask =\n'
+              '      (timing_probe_loop_captured_ ? 0x01U : 0U) |\n'
+              '      (timing_probe_log_captured_ ? 0x02U : 0U) |\n'
+              '      (timing_probe_imu_captured_ ? 0x04U : 0U);\n'
+              '  timing_probe_event_.complete = timing_probe_event_.capture_mask == 0x07U;\n'
+              '  const bool run_ended = status_.state != ExperimentState::RUNNING_BATCH_SWEEP;\n'
+              '  const bool terminal_partial = run_ended && timing_probe_loop_captured_ && timing_probe_imu_captured_;\n'
+              '  if (!timing_probe_event_.complete && !terminal_partial) return;\n'
+              '  logger_->addTimingProbeEvent(timing_probe_event_);\n'
+              '  timing_probe_pending_ = false;\n'
+              '}',
+              '  const bool terminal_partial = run_ended && timing_probe_loop_captured_ && timing_probe_imu_captured_;\n'
+          )
+
+          replace_once(
+              'src/psram_logger.cpp',
+              '    json += ",\\\"first_imu_dt_after_start_us\\\":" + String(e.first_imu_dt_after_start_us);\n'
+              '    json += ",\\\"first_imu_sample_offset_us\\\":" + String(e.first_imu_sample_offset_us) + "}";',
+              '    json += ",\\\"first_imu_dt_after_start_us\\\":" + String(e.first_imu_dt_after_start_us);\n'
+              '    json += ",\\\"first_imu_sample_offset_us\\\":" + String(e.first_imu_sample_offset_us);\n'
+              '    json += ",\\\"capture_mask\\\":" + String(e.capture_mask);\n'
+              '    json += ",\\\"complete\\\":" + String(e.complete ? "true" : "false") + "}";',
+              '    json += ",\\\"capture_mask\\\":" + String(e.capture_mask);\n'
+          )
+
+          guard = Path('tools/test_v46k_timing_probe_source_guards.py')
+          g = guard.read_text(encoding='utf-8')
+          marker = 'print("V46k timing-probe guards passed")'
+          extra = '''# Run boundaries must not carry an unfinished probe into the next autonomous Run.\nreset_region = runner[runner.index("void ExperimentRunner::resetEnergyControlAutonomous()"):runner.index("void ExperimentRunner::resetEnergyControlAutonomousPeakTracker") ]\nfor token in (\n    "timing_probe_event_ = PsramLogger::TimingProbeEvent{}",\n    "timing_probe_pending_ = false",\n    "timing_probe_loop_captured_ = false",\n    "timing_probe_log_captured_ = false",\n    "timing_probe_imu_captured_ = false",\n):\n    assert token in reset_region, token\n\n# The final pulse can end the 30 s Run before its first due 2 ms audit row.\n# Keep one metadata event with an explicit capture mask rather than silently\n# dropping it; this remains observational and cannot affect control.\nassert "kMaxTimingProbeEvents = Config::ENERGY_CONTROL_AUTONOMOUS_MAX_EVENTS" in logger_h\nassert "uint8_t capture_mask" in logger_h\nassert "bool complete" in logger_h\nassert "terminal_partial" in runner\nassert "timing_probe_event_.capture_mask" in runner\nassert "\\\"capture_mask\\\"" in logger\nassert "\\\"complete\\\"" in logger\n\n'''
+          if extra not in g:
+              if marker not in g:
+                  raise SystemExit('V46k guard print marker missing')
+              g = g.replace(marker, extra + marker, 1)
+              guard.write_text(g, encoding='utf-8')
           PY
       - name: Verify V46j/V46k validation identity
         run: grep -R -E -q "(v46j_mekf_dual_core_roller_ready_20260913|v46k_pulse_start_timing_probe_20260914)" src
@@ -43,14 +120,8 @@ jobs:
         run: python tools/test_v46g_highrate_source_guards.py
       - name: Run V46 task/recovery guard
         run: python tools/test_v46i_task_split_source_guards.py
-      - name: Run optional V46k timing-probe guard
-        shell: bash
-        run: |
-          if test -f tools/test_v46k_timing_probe_source_guards.py; then
-            python tools/test_v46k_timing_probe_source_guards.py
-          fi
-      - name: Verify V46k timing-event capacity
-        run: grep -q 'kMaxTimingProbeEvents = Config::ENERGY_CONTROL_AUTONOMOUS_MAX_EVENTS' src/psram_logger.h
+      - name: Run V46k timing-probe guard
+        run: python tools/test_v46k_timing_probe_source_guards.py
       - name: Run RWLOG v46 regression
         run: python tools/test_rwlog_v46_converter.py
       - name: Check V46 analysis tool
@@ -76,7 +147,7 @@ jobs:
             0xe000 dist/boot_app0.bin \
             0x10000 dist/firmware.bin
           printf '%s\n' \
-            'AtomS3R V46k MEKF 400Hz gyro / 200Hz accel / predicted-control / self-healing Core0 Roller I/O flash layout' \
+            'AtomS3R V46k MEKF 400Hz gyro / 200Hz accel / pulse-start timing diagnostic' \
             '0x0000  bootloader.bin' \
             '0x8000  partitions.bin' \
             '0xe000  boot_app0.bin' \
@@ -91,15 +162,15 @@ jobs:
           path: dist/
           if-no-files-found: error
           retention-days: 30
-      - name: Commit V46k timing-event capacity if needed
+      - name: Commit V46k probe-state robustness patch
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
-          if git diff --quiet -- src/psram_logger.h; then
-            echo 'Timing-event capacity already committed'
+          if git diff --quiet -- src/experiment_runner.cpp src/psram_logger.h src/psram_logger.cpp tools/test_v46k_timing_probe_source_guards.py; then
+            echo 'Probe-state robustness patch already committed'
             exit 0
           fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src/psram_logger.h
-          git commit -m 'Match V46k timing probe capacity to autonomous events'
+          git add src/experiment_runner.cpp src/psram_logger.h src/psram_logger.cpp tools/test_v46k_timing_probe_source_guards.py
+          git commit -m 'Harden V46k timing probe run boundaries'
           git push origin HEAD:main
