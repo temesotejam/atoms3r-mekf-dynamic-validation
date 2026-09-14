@@ -40,9 +40,11 @@ jobs:
           python tools/test_rwlog_v46_converter.py
           g++ -std=c++17 -O2 tools/test_mekf_host.cpp src/mekf6.cpp -o /tmp/test_mekf
           /tmp/test_mekf
+      - name: Verify V46q lightweight acquisition and timing profile
+        run: python tools/run_v46q_tests.py
       - name: Install PlatformIO
         run: pip install platformio
-      - name: Build motor-driven V46p firmware
+      - name: Build motor-driven V46q firmware
         run: pio run -e atoms3cam
       - name: Package flash images
         run: |
@@ -52,12 +54,12 @@ jobs:
           cp "$HOME/.platformio/packages/framework-arduinoespressif32/tools/partitions/boot_app0.bin" dist/
           python "$HOME/.platformio/packages/tool-esptoolpy/esptool.py" --chip esp32s3 merge_bin -o dist/merged-firmware.bin 0x0000 dist/bootloader.bin 0x8000 dist/partitions.bin 0xe000 dist/boot_app0.bin 0x10000 dist/firmware.bin
           printf '%s\n' "$GITHUB_SHA" > dist/build-sha.txt
-          printf '%s\n' 'V46p 0.46.15; merged-firmware.bin at 0x0000; real V7 motor controller retained' > dist/FLASH_LAYOUT.txt
+          printf '%s\n' 'V46q 0.46.16; merged-firmware.bin at 0x0000; real V7 motor controller retained' > dist/FLASH_LAYOUT.txt
           (cd dist && sha256sum *.bin > SHA256SUMS.txt)
           git diff --exit-code
       - uses: actions/upload-artifact@v4
         with:
-          name: atoms3r-v46p-${{ github.sha }}
+          name: atoms3r-v46q-${{ github.sha }}
           path: dist/
           if-no-files-found: error
           retention-days: 30
