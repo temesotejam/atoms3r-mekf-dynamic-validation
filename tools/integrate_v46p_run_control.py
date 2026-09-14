@@ -127,6 +127,8 @@ web=web.replace('  // Refresh from the idle mailbox before the unchanged physica
 for name in ['handleStartPassive','handleStartEnergyControlV0']:
     marker='void WebUi::'+name+'() {\n'
     web=web.replace(marker,marker+'  if (!run_control.ready()) { server_->send(503, "text/plain", "run_control_worker_not_ready"); return; }\n',1)
+# The reviewed archive had one additional final blank line; preserve its exact bytes.
+web=web.rstrip('\n')+'\n\n'
 write('src/web_ui.cpp',web)
 logger=read('src/psram_logger.cpp').replace('extern ImuManager imu;','extern ImuManager imu;\n#include "run_control_worker.h"\nextern RunControlWorker run_control;')
 marker='  json += "\\\"v46n_imu_acquisition\\\":" + imu.acquisitionDiagnosticsJson() + ",";'
@@ -138,7 +140,8 @@ for path in ['src/main.cpp','src/web_ui.cpp','src/imu_manager.cpp','site/index.h
 guard=read('tools/test_v46n_acquisition_source.py').replace("status.index('if (runner_->running())')","status.index('if (run_control.active())')")
 guard=guard.replace("assert 'char body[192]' in status", "assert 'char body[192]' in status\nassert 'run_control.snapshot()' in status")
 write('tools/test_v46n_acquisition_source.py',guard)
-page=read('site/index.html')
+# Correct the pre-existing duplicated kana in the published V46o page.
+page=read('site/index.html').replace('全取得サンプルルの','全取得サンプルの')
 marker='    <section class="panel important">'
 note='''    <section class="panel important">
       <h2>V46p：開始同期・制御もHTTPから独立化</h2>
