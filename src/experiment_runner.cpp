@@ -131,7 +131,8 @@ void ExperimentRunner::update() {
   const ImuReading& r = imu_->reading();
   if (r.gyro_sequence != 0 && r.gyro_sequence != last_imu_update_us_) {
     if (timing_probe_pending_ && !timing_probe_imu_captured_ &&
-        r.gyro_sequence != timing_probe_event_.gyro_sequence_at_start) {
+        r.gyro_sequence != timing_probe_event_.gyro_sequence_at_start &&
+        static_cast<int32_t>(r.last_gyro_update_us - timing_probe_event_.pulse_start_us) >= 0) {
       timing_probe_event_.first_imu_dt_after_start_us = r.gyro_update_dt_us;
       timing_probe_event_.first_imu_sample_offset_us = r.last_gyro_update_us == 0 ? 0 :
           static_cast<uint32_t>(r.last_gyro_update_us - timing_probe_event_.pulse_start_us);

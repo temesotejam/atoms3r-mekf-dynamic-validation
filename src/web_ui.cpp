@@ -8,7 +8,7 @@ static const char INDEX_HTML[] PROGMEM = R"HTML(
 <!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Autonomous Energy Control V7</title><style>
 body{margin:0;font-family:system-ui,sans-serif;background:#f6f8fb;color:#17202a}header{padding:14px 16px;background:#263341;color:#fff}main{padding:14px;max-width:700px;margin:auto}.card{border:1px solid #b8c2ce;background:#fff;padding:14px;border-radius:7px;margin:12px 0}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.metric{background:#f6f8fb;border-radius:5px;padding:9px}.metric b{display:block;font-size:1.18rem}.yes{color:#087d2f}.no{color:#a11d27}button,a,select,input{box-sizing:border-box;width:100%;margin-top:10px;border:1px solid #b8c2ce;background:#1769e0;color:#fff;padding:11px;border-radius:6px;font-size:16px;text-align:center;text-decoration:none}select{background:#fff;color:#17202a}button.danger{background:#c4262e;border-color:#c4262e}button:disabled,a.disabled,select:disabled{opacity:.42;pointer-events:none}small{display:block;line-height:1.45;margin:9px 0;color:#536273}</style></head><body>
-<header><h1>Autonomous Energy Control V7</h1></header><main><p id="summary">Connecting...</p>
+<header><h1>Autonomous Energy Control V7</h1><div>V46n / 0.46.13 / priority IMU acquisition</div></header><main><p id="summary">Connecting...</p>
 <div class="card"><b>Current Roll (static-calibrated display)</b><div class="grid"><div class="metric">Physical Roll Abs<b id="abs">--</b></div><div class="metric">Current Roll<b id="current">--</b></div><div class="metric">Physical Rate<b id="rate">--</b></div><div class="metric">Target / Error<b id="targetError">--</b></div><div class="metric">STATIC<b id="static">--</b></div><div class="metric">READY<b id="ready">--</b></div></div><button id="zero" onclick="zeroCurrentRoll()">ZERO Current Roll (display only)</button><label for="target">Target Current Roll</label><select id="target" onchange="setTarget()"><option value="-15">-15 deg</option><option value="-12">-12 deg</option><option value="-8">-8 deg</option><option value="-4">-4 deg</option><option value="-1.5">-1.5 deg</option><option value="0" selected>0 deg</option><option value="1.5">+1.5 deg</option><option value="4">+4 deg</option><option value="8">+8 deg</option><option value="12">+12 deg</option><option value="15">+15 deg</option></select><small id="criteria">Display-only current-roll UI. ZERO and READY never change the V0 absolute energy target or motor command.</small></div>
 <div class="card"><b>Q1 direct next-peak shadow (motor OFF)</b><small>Q1 shadow remains a diagnostic. Its target does not affect the V0 motor command.</small><label for="shadowTarget">Q1 shadow target |A| (deg)</label><input id="shadowTarget" type="number" min="0" max="18" step="0.1" value="0.0" onchange="setShadowTarget()"></div>
 <div class="card"><b>Passive release capture (0 mA)</b><small>Records a one-release free-decay reference. All samples remain motor/current/pulse = 0.</small><button id="passive" onclick="startPassive()">Start passive capture</button></div>
@@ -34,6 +34,11 @@ void WebUi::begin(WebServer& server, ExperimentRunner& runner, ImuManager& imu, 
 
   server_->on("/", HTTP_GET, [this]() { handleRoot(); });
   server_->on("/status.json", HTTP_GET, [this]() { handleStatus(); });
+  server_->on("/imu-acquisition.json", HTTP_GET, [this]() {
+    if (runner_->running()) { server_->send(409, "text/plain", "read_after_run"); return; }
+    server_->sendHeader("Cache-Control", "no-store");
+    server_->send(200, "application/json", imu_->acquisitionDiagnosticsJson());
+  });
   server_->on("/start-passive", HTTP_POST, [this]() { handleStartPassive(); });
   server_->on("/start-energy-control-v0", HTTP_POST, [this]() { handleStartEnergyControlV0(); });
   server_->on("/start-energy-control-autonomous", HTTP_POST, [this]() { handleStartEnergyControlAutonomous(); });
