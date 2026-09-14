@@ -1,88 +1,59 @@
 name: pages
-
 on:
   push:
-    branches: [main, "feature/v46-mekf-dynamic-validation"]
+    branches: [main]
   workflow_dispatch:
-
 permissions:
   contents: read
   pages: write
   id-token: write
-
 concurrency:
   group: pages
   cancel-in-progress: true
-
 jobs:
   build-site:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.x"
-
-      - name: Install PlatformIO
-        run: pip install --upgrade platformio
-
-      - name: Validate V46l web files
+          python-version: "3.11"
+      - name: Verify V46n release and retained motor guards
         run: |
-          test -s site/index.html
-          test -s site/styles.css
+          python tools/test_v46n_acquisition_source.py
+          python tools/test_current_audit_source_guards.py
+          python tools/test_v46_motor_validation_source_guards.py
+          python tools/test_v46g_highrate_source_guards.py
+          python tools/test_v46i_task_split_source_guards.py
+          python tools/test_v46k_timing_probe_source_guards.py
+          python tools/test_v46l_fast_solver_shadow.py
+          python tools/test_rwlog_v46_converter.py
+          g++ -std=c++11 -O2 tools/test_v46n_acquisition.cpp -o /tmp/test_acq
+          /tmp/test_acq
           python -m json.tool site/manifest.json >/dev/null
-          grep -q "V46l MEKF Motor Validation" site/index.html
-          grep -q "v46l_fast_solver_shadow_20260914" site/index.html
-          grep -q '"version": "0\.46\.11"' site/manifest.json
-
-      - name: Run V46 high-rate guard
-        run: python tools/test_v46g_highrate_source_guards.py
-
-      - name: Run V46 task/recovery guard
-        run: python tools/test_v46i_task_split_source_guards.py
-
-      - name: Run V46 motor safety guard
-        run: python tools/test_v46_motor_validation_source_guards.py
-
-      - name: Run inherited V46k timing-probe guard
-        run: python tools/test_v46k_timing_probe_source_guards.py
-
-      - name: Run V46l fast-solver shadow guard
-        run: python tools/test_v46l_fast_solver_shadow.py
-
-      - name: Build V46l AtomS3R firmware
+          grep -q 'v46n_priority_imu_20260914' site/index.html
+      - name: Install PlatformIO
+        run: pip install platformio
+      - name: Build V46n motor-driven firmware
         run: pio run -e atoms3cam
-
-      - name: Assemble Pages artifact
-        shell: bash
+      - name: Assemble verified web flasher
         run: |
-          set -euo pipefail
-          rm -rf _site
+          set -euxo pipefail
           mkdir -p _site/firmware
           cp -R site/. _site/
-          cp .pio/build/atoms3cam/bootloader.bin _site/firmware/bootloader.bin
-          cp .pio/build/atoms3cam/partitions.bin _site/firmware/partitions.bin
-          cp .pio/build/atoms3cam/firmware.bin _site/firmware/firmware.bin
-          BOOT_APP0="$(find "$HOME/.platformio/packages/framework-arduinoespressif32" -type f -name boot_app0.bin | head -n 1)"
-          test -n "$BOOT_APP0"
-          cp "$BOOT_APP0" _site/firmware/boot_app0.bin
+          cp .pio/build/atoms3cam/{bootloader.bin,partitions.bin,firmware.bin} _site/firmware/
+          cp "$HOME/.platformio/packages/framework-arduinoespressif32/tools/partitions/boot_app0.bin" _site/firmware/
           printf '%s\n' "$GITHUB_SHA" > _site/build-sha.txt
-          python -m json.tool _site/manifest.json >/dev/null
-          test -s _site/firmware/bootloader.bin
-          test -s _site/firmware/partitions.bin
-          test -s _site/firmware/boot_app0.bin
-          test -s _site/firmware/firmware.bin
-
-      - name: Configure GitHub Pages
-        uses: actions/configure-pages@v5
+          (cd _site/firmware && sha256sum *.bin > SHA256SUMS.txt)
+          git diff --exit-code
+      - uses: actions/configure-pages@v5
         with:
           enablement: true
-
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
-
   deploy:
     needs: build-site
     runs-on: ubuntu-latest
@@ -90,6 +61,5 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Deploy to GitHub Pages
+      - uses: actions/deploy-pages@v4
         id: deployment
-        uses: actions/deploy-pages@v4
