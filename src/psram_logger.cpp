@@ -1339,7 +1339,9 @@ String PsramLogger::buildMetadataJson() const {
     json += ",\"runner_update_call_us\":" + String(e.runner_update_call_us);
     json += ",\"core1_path_us\":" + String(e.core1_path_us);
     json += ",\"first_imu_dt_after_start_us\":" + String(e.first_imu_dt_after_start_us);
-    json += ",\"first_imu_sample_offset_us\":" + String(e.first_imu_sample_offset_us) + "}";
+    json += ",\"first_imu_sample_offset_us\":" + String(e.first_imu_sample_offset_us);
+    json += ",\"capture_mask\":" + String(e.capture_mask);
+    json += ",\"complete\":" + String(e.complete ? "true" : "false") + "}";
   }
   json += "],";
   json += "\"energy_control_autonomous_peak_events\":[";

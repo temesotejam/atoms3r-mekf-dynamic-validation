@@ -499,6 +499,8 @@ class PsramLogger {
     uint32_t core1_path_us = 0;
     uint32_t first_imu_dt_after_start_us = 0;
     uint32_t first_imu_sample_offset_us = 0;
+    uint8_t capture_mask = 0;  // bit0=Core1 loop, bit1=2ms audit log, bit2=fresh gyro.
+    bool complete = false;
   };
   void addEnergyControlAutonomousZeroCrossEvent(const EnergyControlAutonomousZeroCrossEvent& event);
   void addTimingProbeEvent(const TimingProbeEvent& event);

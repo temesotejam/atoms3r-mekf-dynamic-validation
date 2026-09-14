@@ -60,4 +60,26 @@ for forbidden in (
 ):
     assert forbidden not in controller_region
 
+# Run boundaries must not carry an unfinished probe into the next autonomous Run.
+reset_region = runner[runner.index("void ExperimentRunner::resetEnergyControlAutonomous()"):runner.index("void ExperimentRunner::resetEnergyControlAutonomousPeakTracker") ]
+for token in (
+    "timing_probe_event_ = PsramLogger::TimingProbeEvent{}",
+    "timing_probe_pending_ = false",
+    "timing_probe_loop_captured_ = false",
+    "timing_probe_log_captured_ = false",
+    "timing_probe_imu_captured_ = false",
+):
+    assert token in reset_region, token
+
+# The final pulse can end the 30 s Run before its first due 2 ms audit row.
+# Keep one metadata event with an explicit capture mask rather than silently
+# dropping it; this remains observational and cannot affect control.
+assert "kMaxTimingProbeEvents = Config::ENERGY_CONTROL_AUTONOMOUS_MAX_EVENTS" in logger_h
+assert "uint8_t capture_mask" in logger_h
+assert "bool complete" in logger_h
+assert "terminal_partial" in runner
+assert "timing_probe_event_.capture_mask" in runner
+assert "capture_mask" in logger
+assert "complete" in logger
+
 print("V46k timing-probe guards passed")

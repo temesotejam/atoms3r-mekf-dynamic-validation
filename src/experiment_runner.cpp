@@ -2132,6 +2132,11 @@ void ExperimentRunner::updateEnergyControlV0Pulse(uint32_t now_ms) {
   }
 }
 void ExperimentRunner::resetEnergyControlAutonomous() {
+  timing_probe_event_ = PsramLogger::TimingProbeEvent{};
+  timing_probe_pending_ = false;
+  timing_probe_loop_captured_ = false;
+  timing_probe_log_captured_ = false;
+  timing_probe_imu_captured_ = false;
   energy_control_autonomous_pulse_authorized_ = false;
   energy_control_autonomous_phase_ = EnergyControlAutonomousPhase::IDLE;
   energy_control_autonomous_half_cycle_state_ = EnergyControlAutonomousHalfCycleState::WAIT_PEAK;
@@ -2860,8 +2865,15 @@ void ExperimentRunner::recordTimingProbeLoop(uint32_t imu_update_us, uint32_t ru
 }
 
 void ExperimentRunner::maybeFinalizeTimingProbe() {
-  if (!timing_probe_pending_ || !timing_probe_loop_captured_ ||
-      !timing_probe_log_captured_ || !timing_probe_imu_captured_ || !logger_) return;
+  if (!timing_probe_pending_ || !logger_) return;
+  timing_probe_event_.capture_mask =
+      (timing_probe_loop_captured_ ? 0x01U : 0U) |
+      (timing_probe_log_captured_ ? 0x02U : 0U) |
+      (timing_probe_imu_captured_ ? 0x04U : 0U);
+  timing_probe_event_.complete = timing_probe_event_.capture_mask == 0x07U;
+  const bool run_ended = status_.state != ExperimentState::RUNNING_BATCH_SWEEP;
+  const bool terminal_partial = run_ended && timing_probe_loop_captured_ && timing_probe_imu_captured_;
+  if (!timing_probe_event_.complete && !terminal_partial) return;
   logger_->addTimingProbeEvent(timing_probe_event_);
   timing_probe_pending_ = false;
 }
