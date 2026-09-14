@@ -4,12 +4,14 @@
 
 #include "config.h"
 #include "upright_pose_guide.h"
+#include "run_control_worker.h"
+extern RunControlWorker run_control;
 
 static const char INDEX_HTML[] PROGMEM = R"HTML(
 <!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Autonomous Energy Control V7</title><style>
 body{margin:0;font-family:system-ui,sans-serif;background:#f6f8fb;color:#17202a}header{padding:14px 16px;background:#263341;color:#fff}main{padding:14px;max-width:700px;margin:auto}.card{border:1px solid #b8c2ce;background:#fff;padding:14px;border-radius:7px;margin:12px 0}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.metric{background:#f6f8fb;border-radius:5px;padding:9px}.metric b{display:block;font-size:1.18rem}.yes{color:#087d2f}.no{color:#a11d27}button,a,select,input{box-sizing:border-box;width:100%;margin-top:10px;border:1px solid #b8c2ce;background:#1769e0;color:#fff;padding:11px;border-radius:6px;font-size:16px;text-align:center;text-decoration:none}select{background:#fff;color:#17202a}button.danger{background:#c4262e;border-color:#c4262e}button:disabled,a.disabled,select:disabled{opacity:.42;pointer-events:none}small{display:block;line-height:1.45;margin:9px 0;color:#536273}</style></head><body>
-<header><h1>Autonomous Energy Control V7</h1><div>V46o / 0.46.14 / priority IMU acquisition</div></header><main><p id="summary">Connecting...</p>
+<header><h1>Autonomous Energy Control V7</h1><div>V46p / 0.46.15 / priority IMU acquisition</div></header><main><p id="summary">Connecting...</p>
 <div class="card"><b>起動・立位診断</b><p id="startupInfo">IMUを初期化しています</p><a href="/imu-acquisition.json">停止中のIMU診断JSON</a><p id="errorInfo"></p></div>
 <div class="card"><b>Current Roll (static-calibrated display)</b><div class="grid"><div class="metric">Physical Roll Abs<b id="abs">--</b></div><div class="metric">Current Roll<b id="current">--</b></div><div class="metric">Physical Rate<b id="rate">--</b></div><div class="metric">Target / Error<b id="targetError">--</b></div><div class="metric">STATIC<b id="static">--</b></div><div class="metric">READY<b id="ready">--</b></div></div><button id="zero" onclick="zeroCurrentRoll()">ZERO Current Roll (display only)</button><label for="target">Target Current Roll</label><select id="target" onchange="setTarget()"><option value="-15">-15 deg</option><option value="-12">-12 deg</option><option value="-8">-8 deg</option><option value="-4">-4 deg</option><option value="-1.5">-1.5 deg</option><option value="0" selected>0 deg</option><option value="1.5">+1.5 deg</option><option value="4">+4 deg</option><option value="8">+8 deg</option><option value="12">+12 deg</option><option value="15">+15 deg</option></select><small id="criteria">Display-only current-roll UI. ZERO and READY never change the V0 absolute energy target or motor command.</small></div>
 <div class="card"><b>Q1 direct next-peak shadow (motor OFF)</b><small>Q1 shadow remains a diagnostic. Its target does not affect the V0 motor command.</small><label for="shadowTarget">Q1 shadow target |A| (deg)</label><input id="shadowTarget" type="number" min="0" max="18" step="0.1" value="0.0" onchange="setShadowTarget()"></div>
@@ -37,7 +39,7 @@ void WebUi::begin(WebServer& server, ExperimentRunner& runner, ImuManager& imu, 
   server_->on("/", HTTP_GET, [this]() { handleRoot(); });
   server_->on("/status.json", HTTP_GET, [this]() { handleStatus(); });
   server_->on("/imu-acquisition.json", HTTP_GET, [this]() {
-    if (runner_->running()) { server_->send(409, "text/plain", "read_after_run"); return; }
+    if (run_control.active() || runner_->running()) { server_->send(409, "text/plain", "read_after_run"); return; }
     server_->sendHeader("Cache-Control", "no-store");
     server_->send(200, "application/json", imu_->acquisitionDiagnosticsJson());
   });
@@ -52,6 +54,7 @@ void WebUi::begin(WebServer& server, ExperimentRunner& runner, ImuManager& imu, 
   server_->on("/current-roll/target", HTTP_POST, [this]() { handleSetCurrentRollTarget(); });
   server_->on("/q1-shadow/target", HTTP_POST, [this]() { handleSetQ1ShadowTargetPeakAbs(); });
   server_->on("/download/rwlog", HTTP_GET, [this]() { handleRwLog(); });
+  server_->enableDelay(false);  // Empty HTTP polls must not add sleeps to idle acquisition.
   server_->begin();
 }
 
@@ -60,22 +63,24 @@ void WebUi::update() {
 }
 
 void WebUi::handleRoot() {
-  if (runner_->running()) { server_->send(409, "text/plain", "read_after_run"); return; }
+  if (run_control.active()) { server_->send(409, "text/plain", "run_in_progress"); return; }
+  if (run_control.active() || runner_->running()) { server_->send(409, "text/plain", "read_after_run"); return; }
   server_->sendHeader("Cache-Control", "no-store, no-cache, must-revalidate");
   server_->sendHeader("Pragma", "no-cache");
   server_->send_P(200, "text/html; charset=utf-8", INDEX_HTML);
 }
 
 void WebUi::handleStatus() {
-  if (runner_->running()) {
-    // Fixed-size heartbeat; never construct the many-kilobyte idle status
-    // in START_SYNC or while a pulse is live. HTTP ESTOP remains serviced.
+  if (run_control.active()) {
+    // Copy only immutable POD status; do not read runner/logger/imu.reading
+    // while the higher-priority worker owns them. No network I/O in a lock.
+    const RunControlSnapshot st = run_control.snapshot();
     char body[192];
-    const auto& st = runner_->status();
     snprintf(body, sizeof(body),
-             "{\"running\":true,\"state\":\"%s\",\"motor_cmd_mA\":%d,\"remaining_ms\":%lu}",
-             runner_->stateName(), static_cast<int>(st.motor_cmd_mA),
-             static_cast<unsigned long>(st.remaining_ms));
+        "{\"running\":%s,\"state\":\"%s\",\"motor_cmd_mA\":%d,\"roller_actual_current_mA\":%d,\"remaining_ms\":%lu}",
+        st.running ? "true" : "false", st.state_name,
+        static_cast<int>(st.motor_cmd_mA), static_cast<int>(st.actual_current_mA),
+        static_cast<unsigned long>(st.remaining_ms));
     server_->send(200, "application/json", body);
     return;
   }
@@ -83,6 +88,8 @@ void WebUi::handleStatus() {
 }
 
 void WebUi::handleStartPassive() {
+  if (!run_control.ready()) { server_->send(503, "text/plain", "run_control_worker_not_ready"); return; }
+  if (run_control.active()) { server_->send(409, "text/plain", "run_in_progress"); return; }
   if (logger_->downloading()) {
     server_->send(409, "text/plain", "download_in_progress");
     return;
@@ -92,6 +99,8 @@ void WebUi::handleStartPassive() {
 }
 
 void WebUi::handleStartEnergyControlV0() {
+  if (!run_control.ready()) { server_->send(503, "text/plain", "run_control_worker_not_ready"); return; }
+  if (run_control.active()) { server_->send(409, "text/plain", "run_in_progress"); return; }
   if (logger_->downloading()) {
     server_->send(409, "text/plain", "download_in_progress");
     return;
@@ -102,7 +111,9 @@ void WebUi::handleStartEnergyControlV0() {
 }
 
 void WebUi::handleStartEnergyControlAutonomous() {
+  if (run_control.active()) { server_->send(409, "text/plain", "run_in_progress"); return; }
   if (logger_->downloading()) { server_->send(409, "text/plain", "download_in_progress"); return; }
+  if (!run_control.ready()) { server_->send(503, "text/plain", "run_control_worker_not_ready"); return; }
   // Refresh from the idle mailbox before the unchanged physical start gate.
   // The run boundary is established by main AFTER this HTTP response returns.
   imu_->update();
@@ -111,6 +122,7 @@ void WebUi::handleStartEnergyControlAutonomous() {
 }
 
 void WebUi::handleSetEnergyControlAutonomousTarget() {
+  if (run_control.active()) { server_->send(409, "text/plain", "run_in_progress"); return; }
   if (!server_->hasArg("deg")) { server_->send(400, "text/plain", "target_deg_required"); return; }
   if (runner_->running()) { server_->send(409, "text/plain", "running"); return; }
   const bool ok = runner_->setEnergyControlAutonomousTarget(server_->arg("deg").toFloat());
@@ -118,8 +130,10 @@ void WebUi::handleSetEnergyControlAutonomousTarget() {
 }
 
 void WebUi::handleStartQIdent() {
+  if (run_control.active()) { server_->send(409, "text/plain", "run_in_progress"); return; }
   server_->send(409, "text/plain", "q_ident_frozen_use_energy_control_v0");
 }void WebUi::handleStart() {
+  if (run_control.active()) { server_->send(409, "text/plain", "run_in_progress"); return; }
   if (logger_->downloading()) {
     server_->send(409, "text/plain", "download_in_progress");
     return;
@@ -134,6 +148,7 @@ void WebUi::handleStartQIdent() {
 }
 
 void WebUi::handleStartZeroCross() {
+  if (run_control.active()) { server_->send(409, "text/plain", "run_in_progress"); return; }
   if (logger_->downloading()) {
     server_->send(409, "text/plain", "download_in_progress");
     return;
@@ -155,12 +170,14 @@ void WebUi::handleStartZeroCross() {
   server_->send(ok ? 200 : 409, "text/plain", ok ? "zero_cross_started" : "start_failed");
 }
 void WebUi::handleStartIdentification() {
+  if (run_control.active()) { server_->send(409, "text/plain", "run_in_progress"); return; }
   if (logger_->downloading()) { server_->send(409, "text/plain", "download_in_progress"); return; }
   const bool ok = runner_->startZeroCrossIdentificationTest();
   server_->send(ok ? 200 : 409, "text/plain", ok ? "validation_started" : "start_failed");
 }
 
 void WebUi::handleStartControl() {
+  if (run_control.active()) { server_->send(409, "text/plain", "run_in_progress"); return; }
   if (logger_->downloading()) { server_->send(409, "text/plain", "download_in_progress"); return; }
   if (!server_->hasArg("target_peak_deg")) { server_->send(400, "text/plain", "target_peak_deg_required"); return; }
   const float target_peak_deg = server_->arg("target_peak_deg").toFloat();
@@ -176,6 +193,7 @@ void WebUi::handleStartControl() {
   server_->send(ok ? 200 : 409, "text/plain", ok ? "control_started" : "start_failed");
 }
 void WebUi::handleZero() {
+  if (run_control.active()) { server_->send(409, "text/plain", "run_in_progress"); return; }
   if (runner_->running()) {
     server_->send(409, "text/plain", "running");
     return;
@@ -185,11 +203,13 @@ void WebUi::handleZero() {
 }
 
 void WebUi::handleCurrentRollZero() {
+  if (run_control.active()) { server_->send(409, "text/plain", "run_in_progress"); return; }
   const bool ok = runner_->zeroCurrentRollDisplay();
   server_->send(ok ? 200 : 409, "text/plain", ok ? "current_roll_zeroed" : runner_->status().last_error);
 }
 
 void WebUi::handleSetCurrentRollTarget() {
+  if (run_control.active()) { server_->send(409, "text/plain", "run_in_progress"); return; }
   if (!server_->hasArg("deg")) {
     server_->send(400, "text/plain", "target_deg_required");
     return;
@@ -203,6 +223,7 @@ void WebUi::handleSetCurrentRollTarget() {
 }
 
 void WebUi::handleSetQ1ShadowTargetPeakAbs() {
+  if (run_control.active()) { server_->send(409, "text/plain", "run_in_progress"); return; }
   if (!server_->hasArg("deg")) {
     server_->send(400, "text/plain", "target_deg_required");
     return;
@@ -216,11 +237,16 @@ void WebUi::handleSetQ1ShadowTargetPeakAbs() {
 }
 
 void WebUi::handleStop() {
+  if (run_control.requestStop()) {
+    server_->send(202, "text/plain", "stop_requested");
+    return;
+  }
   runner_->requestEmergencyStop("web_estop");
   server_->send(200, "text/plain", "stopped");
 }
 
 void WebUi::handleClear() {
+  if (run_control.active()) { server_->send(409, "text/plain", "run_in_progress"); return; }
   if (runner_->running() || logger_->downloading()) {
     server_->send(409, "text/plain", "busy");
     return;
@@ -230,6 +256,7 @@ void WebUi::handleClear() {
 }
 
 void WebUi::handleSettings() {
+  if (run_control.active()) { server_->send(409, "text/plain", "run_in_progress"); return; }
   if (runner_->running()) {
     server_->send(409, "text/plain", "running");
     return;
@@ -247,6 +274,7 @@ void WebUi::handleSettings() {
 }
 
 void WebUi::handleRwLog() {
+  if (run_control.active()) { server_->send(409, "text/plain", "run_in_progress"); return; }
   if (runner_->running()) {
     server_->send(409, "text/plain", "measurement_running");
     return;

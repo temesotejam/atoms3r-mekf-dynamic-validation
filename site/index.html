@@ -4,22 +4,34 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#111827">
-  <title>AtomS3R V46o MEKF Motor Validation</title>
+  <title>AtomS3R V46p MEKF Motor Validation</title>
   <link rel="stylesheet" href="styles.css">
   <script type="module" src="https://unpkg.com/esp-web-tools@10.1.1/dist/web/install-button.js?module"></script>
 </head>
 <body>
   <main class="shell">
     <header class="hero">
-      <p class="eyebrow">ATOMS3R / V46o / MOTOR-DRIVEN VALIDATION</p>
+      <p class="eyebrow">ATOMS3R / V46p / MOTOR-DRIVEN VALIDATION</p>
       <h1>MEKF Motor Validation<br><span>Web Flasher</span></h1>
-      <p class="lead">Autonomous Energy Control V7 を実際にモータ駆動しながら、MEKF と dynamic-beta Madgwick を同時記録する V46o ファームウェアです。AtomS3R内蔵BMI270をGyro 400 Hz / Accel 200 Hzで使用し、MEKFは新しいGyroごとにpredict、新しいAccelが来たときだけ補正します。さらにposterior状態を保持したまま、制御用だけ短時間先へ非破壊予測します。</p>
-      <div class="badges"><span>ESP32-S3</span><span>BMI270 400/200 Hz</span><span>RWLOG v46</span><span>V46o Ry180</span><span>predicted control</span></div>
+      <p class="lead">Autonomous Energy Control V7 を実際にモータ駆動しながら、MEKF と dynamic-beta Madgwick を同時記録する V46p ファームウェアです。AtomS3R内蔵BMI270をGyro 400 Hz / Accel 200 Hzで使用し、MEKFは新しいGyroごとにpredict、新しいAccelが来たときだけ補正します。さらにposterior状態を保持したまま、制御用だけ短時間先へ非破壊予測します。</p>
+      <div class="badges"><span>ESP32-S3</span><span>BMI270 400/200 Hz</span><span>RWLOG v46</span><span>V46p Ry180</span><span>predicted control</span></div>
     </header>
 
     <section class="panel important">
-      <h2>V46o / 0.46.14：起動・開始直後ESTOPの修正版</h2>
-      <p>取得版：<code>v46o_startup_boundary_20260914</code>。従来のV7モータ制御、
+      <h2>V46p：開始同期・制御もHTTPから独立化</h2>
+      <p>V46o実機では待機データ4件の除外後、START_SYNC中に14.969 msの受け渡し遅延で停止しました。
+      初期化と立位確認は成功しています。HTTPと制御の同一タスク実行をやめました。</p>
+      <p>測定中：Core 1のIMU取得は優先度6、MEKF/V7/同期LED/ログは専用タスク優先度4、
+      HTTPは優先度2です。RollerはCore 0の優先度4を維持します。
+      状態表示はスナップショット、停止ボタンは専用の停止要求を通し、Webから制御状態を直接変更しません。</p>
+      <p>開始前データの境界、10 ms遅延停止、32件キュー、初期化確認、立位判定と実モータ出力条件は維持します。
+      RWLOGにはSTART_SYNCからの制御周期・処理時間・停止要求の診断を追加しました。
+      この変更による実機での改善は次のRunで確認が必要です。</p>
+    </section>
+
+    <section class="panel important">
+      <h2>V46p / 0.46.15：起動・開始直後ESTOPの修正版</h2>
+      <p>取得版：<code>v46p_run_control_worker_20260914</code>。従来のV7モータ制御、
       ±300 mA・最大100 ms、立位判定、非常停止、2 ms電流監査は維持しています。</p>
       <p>開始応答後に取得連番の境界を1回だけ作り、待機中の古いキューを新しいRunへ持ち込みません。
       Run中の10 ms超の受け渡し遅延・キューあふれによる停止は維持しています。
@@ -27,14 +39,14 @@
       起動・立位の理由と、最初の停止時刻・遅延・キュー滞留数を診断に保存します。</p>
       <div class="grid">
         <article><strong>IMU取得</strong><p>Core 1 / 優先度6<br>1 ms周期の通知で取得し、通知がなければ待機。</p></article>
-        <article><strong>MEKF・制御・Web</strong><p>Core 1 / 優先度2<br>取得タスクが制御計算へ割り込めます。キューが空なら最大1 tick待機。</p></article>
+        <article><strong>MEKF・制御／Web分離</strong><p>Core 1 / 測定中は優先度4<br>HTTPは別タスク優先度2。取得タスクが制御計算へ割り込めます。</p></article>
         <article><strong>モータ・電流監査</strong><p>Core 0 / 優先度4<br>既存Rollerタスクを維持。IMUとは別のI²Cコントローラ。</p></article>
         <article><strong>CPU独占を防止</strong><p>取得処理が1 ms以上かかった場合も1 tick待機し、制御・停止処理へCPUを渡します。</p></article>
       </div>
       <p>32件の時刻付きキューからMEKF・従来solverへ順番に渡します。
       キューあふれ、受け渡し遅れ10 ms超、取得停止は異常として停止します。
       今回の実装では1 RTOS tick＝1 msをビルド時にも確認します。</p>
-      <p>RWLOGの<code>v46n_imu_acquisition</code>には全取得サンプルルの周期集計と
+      <p>RWLOGの<code>v46n_imu_acquisition</code>には全取得サンプルの周期集計と
       受け渡し遅れを別々に保存します。通常RWLOG行は全IMUサンプルではありません。
       時刻はM5Unifiedのホスト取得時刻であり、BMI270内部のサンプル欠落数を直接数えるものではありません。</p>
       <p>姿勢推定・制御の基準版はV46lのままです。今回、solverやピーク振幅の定義は変更していません。
@@ -46,7 +58,7 @@
       <h2>このページから直接書き込めます</h2>
       <p>AtomS3R を USB でPCへ接続し、Chrome または Edge のデスクトップ版で下のボタンを押してください。</p>
       <esp-web-install-button manifest="manifest.json">
-        <button slot="activate" class="primary">AtomS3RへV46oを書き込む</button>
+        <button slot="activate" class="primary">AtomS3RへV46pを書き込む</button>
         <span slot="unsupported" class="warning">このブラウザはWeb Serial / WebUSBに対応していません。PC版ChromeまたはEdgeを使用してください。</span>
       </esp-web-install-button>
       <details>
@@ -72,8 +84,8 @@
     </section>
 
     <section class="panel">
-      <h2>V46oのIMU座標と更新</h2>
-      <p>実機の立位ではRaw IMUの重力がほぼ−Z方向で、動画の物理Pitch角速度は+raw gyと一致しました。V46oでは右手系を保つ <code>R_y(π)=diag(-1,+1,-1)</code> を用います。</p>
+      <h2>V46pのIMU座標と更新</h2>
+      <p>実機の立位ではRaw IMUの重力がほぼ−Z方向で、動画の物理Pitch角速度は+raw gyと一致しました。V46pでは右手系を保つ <code>R_y(π)=diag(-1,+1,-1)</code> を用います。</p>
       <div class="grid">
         <article><strong>Accel</strong><p><code>(-ax, +ay, -az)</code></p></article>
         <article><strong>Gyro</strong><p><code>(-gx, +gy×0.908911)</code>と<code>-gz</code></p></article>
@@ -94,11 +106,11 @@
 
     <section class="panel safety">
       <h2>実機動作について</h2>
-      <p>このV46oはモータを実際に駆動します。可動部から手・ケーブル・治具を離し、異常時は実験画面の <strong>Emergency stop</strong> を使用してください。</p>
+      <p>このV46pはモータを実際に駆動します。可動部から手・ケーブル・治具を離し、異常時は実験画面の <strong>Emergency stop</strong> を使用してください。</p>
       <p>Attitude revision: <code>v46l_fast_solver_shadow_20260914</code></p>
     </section>
 
-    <footer>atoms3r-mekf-dynamic-validation / V46o</footer>
+    <footer>atoms3r-mekf-dynamic-validation / V46p</footer>
   </main>
   <script>
     fetch('build-sha.txt', {cache: 'no-store'})
