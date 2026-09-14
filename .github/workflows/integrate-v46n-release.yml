@@ -27,7 +27,9 @@ jobs:
         with:
           python-version: '3.11'
       - name: Integrate release metadata and identity
-        run: python tools/integrate_v46n_release.py
+        run: |
+          python tools/integrate_v46n_release.py
+          git diff --exit-code -- .github/workflows/build.yml .github/workflows/pages.yml
       - name: Verify acquisition ownership and exact controller baseline
         run: python tools/test_v46n_acquisition_source.py
       - name: Run native and inherited regression tests
@@ -52,11 +54,11 @@ jobs:
           grep -n -A 18 -B 6 'in_port = I2C_NUM_1' .pio/libdeps/atoms3cam/M5Unified/src/M5Unified.cpp
           grep -n -A 45 'void M5Unified::update' .pio/libdeps/atoms3cam/M5Unified/src/M5Unified.cpp
           git diff --check
-      - name: Commit tested integration
+      - name: Commit tested source integration
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src site tools/test_v46i_task_split_source_guards.py tools/test_v46k_timing_probe_source_guards.py tools/test_v46l_fast_solver_shadow.py .github/workflows/build.yml .github/workflows/pages.yml
+          git add src site tools/test_v46i_task_split_source_guards.py tools/test_v46k_timing_probe_source_guards.py tools/test_v46l_fast_solver_shadow.py
           if ! git diff --cached --quiet; then
             git commit -m 'Integrate tested V46n priority acquisition; retain V46l controller'
             git push origin HEAD:feature/v46n-imu-release
