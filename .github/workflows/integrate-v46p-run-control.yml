@@ -19,7 +19,19 @@ jobs:
         with:
           python-version: '3.11'
       - name: Integrate exact V46p source on review branch
-        run: python tools/integrate_v46p_run_control.py
+        run: |
+          python tools/integrate_v46p_run_control.py
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib
+          p = Path('src/web_ui.cpp')
+          data = p.read_bytes()
+          assert hashlib.sha256(data).hexdigest() == '9f46bc1293d2c99f1a2818593a6f546d41c54d906eef90de4ea8fe603877187b'
+          # Only remove the extra blank EOF line, before all tests and compilation.
+          data = data.rstrip(b'\n') + b'\n'
+          assert hashlib.sha256(data).hexdigest() == 'ee3d342e1db96a286b4bc557b95d74ce4a5a97034e48a78280e8a3cf4e634627'
+          p.write_bytes(data)
+          PY
       - name: Verify physical baseline and exclusive ownership
         run: |
           python tools/test_v46n_acquisition_source.py
