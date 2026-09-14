@@ -17,6 +17,9 @@ Roller485Manager roller;
 ExperimentRunner runner;
 WebUi web;
 
+static constexpr UBaseType_t kConsumerPriority = 2;
+static_assert(kConsumerPriority < 6, "BMI270 reader must preempt the consumer");
+
 static uint32_t startup_guide_boot_ms = 0;
 static uint32_t startup_upright_since_ms = 0;
 static bool startup_guide_prompt_announced = false;
@@ -67,12 +70,16 @@ static void updateStartupPoseGuide() {
 
 void setup() {
   startup_guide_boot_ms = millis();
+  // Reader priority 6 remains above this thread; system service priorities stay unchanged.
+  vTaskPrioritySet(nullptr, kConsumerPriority);
   Serial.begin(Config::SERIAL_BAUD);
   delay(300);
   Serial.println();
   // V46l is the frozen controller/attitude baseline, not the acquisition revision.
   Serial.println("AtomS3R V46l MEKF dual-core motor validation");
   Serial.println("V46n acquisition 0.46.13: priority BMI270 task / timestamped queue");
+  Serial.printf("IMU consumer: core=%d priority=%u; BMI270 reader core=1 priority=6\n",
+                xPortGetCoreID(), static_cast<unsigned>(uxTaskPriorityGet(nullptr)));
 
   auto cfg = M5.config();
   cfg.serial_baudrate = 0;
@@ -127,7 +134,7 @@ void loop() {
   updateAcquisitionContext();
 
   // Core 1 priority-6 producer owns sensor I/O and can preempt this consumer.
-  // Core 1 Arduino consumer owns MEKF, unchanged V7 solver, logging and Web.
+  // Core 1 priority-2 consumer owns MEKF, unchanged V7 solver, logging and Web.
   // Core 0 continues to own all Roller motor commands and current audit.
   runner.serviceFast();
   runner.updateImuDynamicBetaContext();
