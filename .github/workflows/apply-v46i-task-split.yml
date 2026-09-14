@@ -1,13 +1,8 @@
 name: apply-v46i-task-split
 
+# Historical one-time migration. Regression checks remain in build.yml/pages.yml.
+# Do not reapply an old source migration when newer release tests are updated.
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'tools/apply_v46i_task_split_patch.py'
-      - 'tools/fix_v46i_snapshot_guard.py'
-      - 'tools/test_v46i_task_split_source_guards.py'
-      - '.github/workflows/apply-v46i-task-split.yml'
   workflow_dispatch:
 
 permissions:
