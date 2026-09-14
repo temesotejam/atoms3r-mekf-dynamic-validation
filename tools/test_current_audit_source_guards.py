@@ -25,10 +25,14 @@ def main() -> None:
     assert "CURRENT_AUDIT_FAST_READ_PERIOD_US = 2000UL" in config
     assert "CURRENT_AUDIT_LOG_PERIOD_US = 2000UL" in config
 
-    # The fast path augments but does not replace the ordinary six-register
-    # snapshot, including voltage and device-state reads.
+    # The fast path augments but does not replace the ordinary full safety/status
+    # snapshot. Verify the behavior inside update() itself rather than depending
+    # on a particular explanatory comment being present.
+    update_body = roller.split("void Roller485Manager::update()", 1)[1].split(
+        "bool Roller485Manager::setCurrentMa", 1
+    )[0]
     for token in (
-        "readI32(REG_CURRENT_READBACK",
+        "readCurrentFresh(command_mA_ != 0)",
         "readI32(REG_VIN",
         "readU8(REG_MODE",
         "readU8(REG_OUTPUT",
@@ -36,8 +40,8 @@ def main() -> None:
         "readU8(REG_ERROR_CODE",
         "recordIo(ok)",
     ):
-        assert token in roller, token
-    assert "The existing full six-register safety/status snapshot remains" in roller
+        assert token in update_body, token
+    assert "readI32(REG_CURRENT_READBACK" in roller
     assert "readCurrentFresh(true)" in roller
 
     # Q_meas is emitted only as a telemetry field. No runner controller method
