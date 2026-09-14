@@ -64,7 +64,7 @@ jobs:
             'merged-firmware.bin: write at 0x0000' \
             > dist/FLASH_LAYOUT.txt
           (cd dist && sha256sum bootloader.bin partitions.bin boot_app0.bin firmware.bin merged-firmware.bin > SHA256SUMS.txt)
-      - name: Upload flashable V46 diagnostic firmware
+      - name: Upload flashable V46k diagnostic firmware
         uses: actions/upload-artifact@v4
         with:
           name: atoms3r-v46-timing-diagnostic-${{ github.sha }}
