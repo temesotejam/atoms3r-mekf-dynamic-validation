@@ -21,13 +21,21 @@
       <h2>V46n / 0.46.13：モータ駆動中のIMU取得を独立化</h2>
       <p>取得版：<code>v46n_priority_imu_20260914</code>。従来のV7モータ制御、
       ±300 mA・最大100 ms、立位判定、非常停止、2 ms電流監査は維持しています。</p>
-      <p>Core 1の優先度6タスクがBMI270を取得し、32件の時刻付きキューから
-      MEKF・従来solverへ順番に渡します。Roller通信はCore 0のままです。
-      キューあふれ、受け渡し遅れ10 ms超、取得停止は異常として停止します。</p>
+      <div class="grid">
+        <article><strong>IMU取得</strong><p>Core 1 / 優先度6<br>1 ms周期の通知で取得し、通知がなければ待機。</p></article>
+        <article><strong>MEKF・制御・Web</strong><p>Core 1 / 優先度2<br>取得タスクが制御計算へ割り込めます。キューが空なら最大1 tick待機。</p></article>
+        <article><strong>モータ・電流監査</strong><p>Core 0 / 優先度4<br>既存Rollerタスクを維持。IMUとは別のI²Cコントローラ。</p></article>
+        <article><strong>CPU独占を防止</strong><p>取得処理が1 ms以上かかった場合も1 tick待機し、制御・停止処理へCPUを渡します。</p></article>
+      </div>
+      <p>32件の時刻付きキューからMEKF・従来solverへ順番に渡します。
+      キューあふれ、受け渡し遅れ10 ms超、取得停止は異常として停止します。
+      今回の実装では1 RTOS tick＝1 msをビルド時にも確認します。</p>
       <p>RWLOGの<code>v46n_imu_acquisition</code>には全取得サンプルの周期集計と
       受け渡し遅れを別々に保存します。通常RWLOG行は全IMUサンプルではありません。
+      時刻はM5Unifiedのホスト取得時刻であり、BMI270内部のサンプル欠落数を直接数えるものではありません。</p>
+      <p>姿勢推定・制御の基準版はV46lのままです。今回、solverやピーク振幅の定義は変更していません。
       モータ駆動中の改善量は実機Runで確認してください。</p>
-      <p>姿勢推定・制御の基準版はV46lのままです。今回、solverやピーク振幅の定義は変更していません。</p>
+      <p>公開ビルド：<code id="build-sha">取得中</code><br><a href="build-sha.txt">ビルドSHAを確認</a> / <a href="firmware/SHA256SUMS.txt">ファームウェアのSHA-256</a></p>
     </section>
 
     <section class="panel important">
@@ -64,7 +72,7 @@
       <p>実機の立位ではRaw IMUの重力がほぼ−Z方向で、動画の物理Pitch角速度は+raw gyと一致しました。V46nでは右手系を保つ <code>R_y(π)=diag(-1,+1,-1)</code> を用います。</p>
       <div class="grid">
         <article><strong>Accel</strong><p><code>(-ax, +ay, -az)</code></p></article>
-        <article><strong>Gyro</strong><p><code>(-gx, +gy×0.908911, -gz)</code></p></article>
+        <article><strong>Gyro</strong><p><code>(-gx, +gy×0.908911)</code>と<code>-gz</code></p></article>
         <article><strong>Gyro predict</strong><p>400 Hz（2.5 ms ODR）</p></article>
         <article><strong>Accel correction</strong><p>fresh Accelのみ 200 Hz</p></article>
       </div>
@@ -88,5 +96,11 @@
 
     <footer>atoms3r-mekf-dynamic-validation / V46n</footer>
   </main>
+  <script>
+    fetch('build-sha.txt', {cache: 'no-store'})
+      .then(r => { if (!r.ok) throw new Error('build identity unavailable'); return r.text(); })
+      .then(s => { document.getElementById('build-sha').textContent = s.trim(); })
+      .catch(() => { document.getElementById('build-sha').textContent = '取得できません。上のリンクで確認してください。'; });
+  </script>
 </body>
 </html>
