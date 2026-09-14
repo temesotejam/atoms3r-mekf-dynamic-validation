@@ -26,25 +26,32 @@ jobs:
       - name: Install PlatformIO
         run: pip install --upgrade platformio
 
-      - name: Validate V46j web files
+      - name: Validate V46j/V46k web files
         run: |
           test -s site/index.html
           test -s site/styles.css
           python -m json.tool site/manifest.json >/dev/null
-          grep -q "V46j MEKF Motor Validation" site/index.html
-          grep -q "v46j_mekf_dual_core_roller_ready_20260913" site/index.html
-          grep -q '"version": "0.46.9"' site/manifest.json
+          grep -E -q "V46(j|k) MEKF Motor Validation" site/index.html
+          grep -E -q "(v46j_mekf_dual_core_roller_ready_20260913|v46k_pulse_start_timing_probe_20260914)" site/index.html
+          grep -E -q '"version": "0\.46\.(9|10)"' site/manifest.json
 
-      - name: Run V46j high-rate guard
+      - name: Run V46 high-rate guard
         run: python tools/test_v46g_highrate_source_guards.py
 
-      - name: Run V46j task/recovery guard
+      - name: Run V46 task/recovery guard
         run: python tools/test_v46i_task_split_source_guards.py
 
-      - name: Run V46j motor safety guard
+      - name: Run V46 motor safety guard
         run: python tools/test_v46_motor_validation_source_guards.py
 
-      - name: Build V46j AtomS3R firmware
+      - name: Run optional V46k timing-probe guard
+        shell: bash
+        run: |
+          if test -f tools/test_v46k_timing_probe_source_guards.py; then
+            python tools/test_v46k_timing_probe_source_guards.py
+          fi
+
+      - name: Build V46 AtomS3R firmware
         run: pio run -e atoms3cam
 
       - name: Assemble Pages artifact
