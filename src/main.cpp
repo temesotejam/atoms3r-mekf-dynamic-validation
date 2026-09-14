@@ -75,18 +75,18 @@ void setup() {
   Serial.begin(Config::SERIAL_BAUD);
   delay(300);
   Serial.println();
-  Serial.println("AtomS3R V46k MEKF dual-core motor validation");
+  Serial.println("AtomS3R V46l MEKF dual-core motor validation");
 
   auto cfg = M5.config();
   cfg.serial_baudrate = 0;
   cfg.internal_imu = true;
   M5.begin(cfg);
-  Serial.printf("V46k identity: board=%d imu_type=%d M5Unified=%s M5GFX=%s AHRS=%s base=%s attitude=%s\n",
+  Serial.printf("V46l identity: board=%d imu_type=%d M5Unified=%s M5GFX=%s AHRS=%s base=%s attitude=%s\n",
                 static_cast<int>(M5.getBoard()), static_cast<int>(M5.Imu.getType()),
                 Config::RESOLVED_M5UNIFIED_VERSION, Config::RESOLVED_M5GFX_VERSION,
                 Config::RESOLVED_ADAFRUIT_AHRS_VERSION, Config::V62_BASE_COMMIT,
                 Config::ATTITUDE_VALIDATION_REVISION);
-  displayLine("V46k MEKF", "DUAL-CORE V7");
+  displayLine("V46l MEKF", "DUAL-CORE V7");
 
   const bool psram_ok = logger.begin();
   Serial.printf("PSRAM: %s total=%u free=%u sample_capacity=%u\n", psram_ok ? "OK" : "FAILED",

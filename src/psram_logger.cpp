@@ -9,6 +9,9 @@ static constexpr uint32_t RWLOG_FLAG_CRC32 = 1U << 0;
 static constexpr size_t STREAM_CHUNK_BYTES = 4096;
 
 namespace {
+String jsonFloatOrNull(float value, unsigned int decimals) {
+  return isfinite(value) ? String(value, decimals) : String("null");
+}
 const char* e2ShadowInvalidReasonName(uint8_t reason) {
   switch (reason) {
     case Config::E2_SHADOW_INVALID_NONE: return "VALID";
@@ -149,6 +152,8 @@ void PsramLogger::clear() {
   energy_control_autonomous_peak_event_count_ = 0;
   energy_control_autonomous_zero_cross_event_count_ = 0;
   energy_control_autonomous_event_overflow_ = false;
+  solver_shadow_event_count_ = 0;
+  solver_shadow_event_overflow_ = false;
   timing_probe_event_count_ = 0;
   timing_probe_event_overflow_ = false;
   calibration_result_ = CalibrationResult{};
@@ -195,6 +200,8 @@ void PsramLogger::startRun(uint16_t run_id, uint64_t run_start_us, int16_t curre
   energy_control_autonomous_peak_event_count_ = 0;
   energy_control_autonomous_zero_cross_event_count_ = 0;
   energy_control_autonomous_event_overflow_ = false;
+  solver_shadow_event_count_ = 0;
+  solver_shadow_event_overflow_ = false;
   timing_probe_event_count_ = 0;
   timing_probe_event_overflow_ = false;
   calibration_result_ = CalibrationResult{};
@@ -299,6 +306,15 @@ void PsramLogger::addEnergyControlAutonomousZeroCrossEvent(const EnergyControlAu
   EnergyControlAutonomousZeroCrossEvent stored = event;
   stored.event_index = energy_control_autonomous_zero_cross_event_count_ + 1;
   energy_control_autonomous_zero_cross_events_[energy_control_autonomous_zero_cross_event_count_++] = stored;
+}
+void PsramLogger::addSolverShadowEvent(const SolverShadowEvent& event) {
+  if (solver_shadow_event_count_ >= kMaxSolverShadowEvents) {
+    solver_shadow_event_overflow_ = true;
+    return;
+  }
+  SolverShadowEvent stored = event;
+  stored.event_index = solver_shadow_event_count_ + 1;
+  solver_shadow_events_[solver_shadow_event_count_++] = stored;
 }
 void PsramLogger::addTimingProbeEvent(const TimingProbeEvent& event) {
   if (timing_probe_event_count_ >= kMaxTimingProbeEvents) {
@@ -1311,6 +1327,45 @@ String PsramLogger::buildMetadataJson() const {
     json += ",\"reason\":\"" + String(energyControlV0ReasonName(e.reason)) + "\"";
     json += ",\"reason_code\":" + String(e.reason);
     json += "}";
+  }
+  json += "],";
+  json += "\"v46l_solver_shadow_revision\":\"v46l_discrete_ternary_shadow_20260914\",";
+  json += "\"v46l_solver_shadow_policy\":\"legacy_exhaustive_solver_controls_motor;fast_solver_runs_only_after_normal_pulse_end;metadata_only\",";
+  json += "\"v46l_solver_shadow_event_overflow\":" + String(solver_shadow_event_overflow_ ? "true" : "false") + ",";
+  json += "\"v46l_solver_shadow_events\":[";
+  for (uint16_t i = 0; i < solver_shadow_event_count_; ++i) {
+    const SolverShadowEvent& e = solver_shadow_events_[i];
+    if (i) json += ",";
+    json += "{\"event_index\":" + String(e.event_index);
+    json += ",\"pulse_id\":" + String(e.pulse_id);
+    json += ",\"t_test_ms\":" + String(e.t_test_ms);
+    json += ",\"physical_next_peak_side\":" + String(e.physical_next_peak_side);
+    json += ",\"q_command_direction\":" + String(e.q_command_direction);
+    json += ",\"command_current_mA\":" + String(e.command_current_mA);
+    json += ",\"model_vbat_mV\":" + String(e.model_vbat_mV);
+    json += ",\"i0_estimated_mA\":" + jsonFloatOrNull(e.i0_estimated_mA, 5);
+    json += ",\"free_next_peak_deg\":" + jsonFloatOrNull(e.free_next_peak_deg, 6);
+    json += ",\"target_peak_deg\":" + jsonFloatOrNull(e.target_peak_deg, 6);
+    json += ",\"target_energy_j\":" + jsonFloatOrNull(e.target_energy_j, 9);
+    json += ",\"q_available_mA_s\":" + jsonFloatOrNull(e.q_available_mA_s, 6);
+    json += ",\"integral_side_mA_s\":" + jsonFloatOrNull(e.integral_side_mA_s, 6);
+    json += ",\"legacy_ff_width_ms\":" + String(e.legacy_ff_width_ms);
+    json += ",\"legacy_ff_q_mA_s\":" + jsonFloatOrNull(e.legacy_ff_q_mA_s, 6);
+    json += ",\"legacy_selected_width_ms\":" + String(e.legacy_selected_width_ms);
+    json += ",\"legacy_selected_q_mA_s\":" + jsonFloatOrNull(e.legacy_selected_q_mA_s, 6);
+    json += ",\"fast_ff_width_ms\":" + String(e.fast_ff_width_ms);
+    json += ",\"fast_ff_q_mA_s\":" + jsonFloatOrNull(e.fast_ff_q_mA_s, 6);
+    json += ",\"fast_selected_width_ms\":" + String(e.fast_selected_width_ms);
+    json += ",\"fast_selected_q_mA_s\":" + jsonFloatOrNull(e.fast_selected_q_mA_s, 6);
+    json += ",\"free_model_us\":" + String(e.free_model_us);
+    json += ",\"legacy_ff_scan_us\":" + String(e.legacy_ff_scan_us);
+    json += ",\"legacy_selected_scan_us\":" + String(e.legacy_selected_scan_us);
+    json += ",\"legacy_decision_us\":" + String(e.legacy_decision_us);
+    json += ",\"fast_shadow_us\":" + String(e.fast_shadow_us);
+    json += ",\"fast_eval_count\":" + String(e.fast_eval_count);
+    json += ",\"fast_valid\":" + String(e.fast_valid ? "true" : "false");
+    json += ",\"ff_width_match\":" + String(e.ff_width_match ? "true" : "false");
+    json += ",\"selected_width_match\":" + String(e.selected_width_match ? "true" : "false") + "}";
   }
   json += "],";
   json += "\"v46k_timing_probe_revision\":\"v46k_pulse_start_core1_profile_20260914\",";

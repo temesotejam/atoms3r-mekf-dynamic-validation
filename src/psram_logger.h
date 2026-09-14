@@ -458,6 +458,7 @@ class PsramLogger {
   static constexpr uint16_t kMaxEnergyControlV0Events = Config::ENERGY_CONTROL_V0_MAX_EVENTS;
   static constexpr uint16_t kMaxEnergyControlAutonomousEvents = Config::ENERGY_CONTROL_AUTONOMOUS_MAX_EVENTS;
   static constexpr uint16_t kMaxTimingProbeEvents = Config::ENERGY_CONTROL_AUTONOMOUS_MAX_EVENTS;
+  static constexpr uint16_t kMaxSolverShadowEvents = Config::ENERGY_CONTROL_AUTONOMOUS_MAX_EVENTS;
   bool begin();
   void clear();
   void startRun(uint16_t run_id, uint64_t run_start_us, int16_t current_mA, uint16_t pulse_width_ms,
@@ -478,6 +479,38 @@ class PsramLogger {
   void addQIdentEvent(const QIdentEvent& event);
   void addEnergyControlV0Event(const EnergyControlV0Event& event);
   void addEnergyControlAutonomousPeakEvent(const EnergyControlAutonomousPeakEvent& event);
+  struct SolverShadowEvent {
+    uint16_t event_index = 0;
+    uint32_t pulse_id = 0;
+    uint32_t t_test_ms = 0;
+    int8_t physical_next_peak_side = 0;
+    int8_t q_command_direction = 0;
+    int16_t command_current_mA = 0;
+    uint16_t model_vbat_mV = 0;
+    float i0_estimated_mA = NAN;
+    float free_next_peak_deg = NAN;
+    float target_peak_deg = NAN;
+    float target_energy_j = NAN;
+    float q_available_mA_s = NAN;
+    float integral_side_mA_s = NAN;
+    uint16_t legacy_ff_width_ms = 0;
+    float legacy_ff_q_mA_s = NAN;
+    uint16_t legacy_selected_width_ms = 0;
+    float legacy_selected_q_mA_s = NAN;
+    uint16_t fast_ff_width_ms = 0;
+    float fast_ff_q_mA_s = NAN;
+    uint16_t fast_selected_width_ms = 0;
+    float fast_selected_q_mA_s = NAN;
+    uint32_t free_model_us = 0;
+    uint32_t legacy_ff_scan_us = 0;
+    uint32_t legacy_selected_scan_us = 0;
+    uint32_t legacy_decision_us = 0;
+    uint32_t fast_shadow_us = 0;
+    uint16_t fast_eval_count = 0;
+    bool fast_valid = false;
+    bool ff_width_match = false;
+    bool selected_width_match = false;
+  };
   struct TimingProbeEvent {
     uint16_t event_index = 0;
     uint32_t pulse_id = 0;
@@ -503,6 +536,7 @@ class PsramLogger {
     bool complete = false;
   };
   void addEnergyControlAutonomousZeroCrossEvent(const EnergyControlAutonomousZeroCrossEvent& event);
+  void addSolverShadowEvent(const SolverShadowEvent& event);
   void addTimingProbeEvent(const TimingProbeEvent& event);
   bool energyControlAutonomousEventCapacityReached() const {
     return energy_control_autonomous_peak_event_count_ >= kMaxEnergyControlAutonomousEvents ||
@@ -593,6 +627,9 @@ private:
   EnergyControlAutonomousZeroCrossEvent energy_control_autonomous_zero_cross_events_[kMaxEnergyControlAutonomousEvents] = {};
   uint16_t energy_control_autonomous_zero_cross_event_count_ = 0;
   bool energy_control_autonomous_event_overflow_ = false;
+  SolverShadowEvent solver_shadow_events_[kMaxSolverShadowEvents] = {};
+  uint16_t solver_shadow_event_count_ = 0;
+  bool solver_shadow_event_overflow_ = false;
   TimingProbeEvent timing_probe_events_[kMaxTimingProbeEvents] = {};
   uint16_t timing_probe_event_count_ = 0;
   bool timing_probe_event_overflow_ = false;

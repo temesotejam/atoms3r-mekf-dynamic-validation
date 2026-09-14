@@ -9,9 +9,9 @@ logger = Path("src/psram_logger.cpp").read_text(encoding="utf-8")
 log_types = Path("src/log_types.h").read_text(encoding="utf-8")
 manifest = Path("site/manifest.json").read_text(encoding="utf-8")
 
-assert "v46k_pulse_start_timing_probe_20260914" in config
-assert "V46k" in main
-assert '"version": "0.46.10"' in manifest
+assert "v46l_fast_solver_shadow_20260914" in config
+assert "V46l" in main
+assert '"version": "0.46.11"' in manifest
 
 # Physical/control behavior is deliberately frozen from V46j.
 assert "CURRENT_AUDIT_FAST_READ_PERIOD_US = 2000UL" in config
@@ -82,4 +82,4 @@ assert "timing_probe_event_.capture_mask" in runner
 assert "capture_mask" in logger
 assert "complete" in logger
 
-print("V46k timing-probe guards passed")
+print("V46l timing-probe guards passed")

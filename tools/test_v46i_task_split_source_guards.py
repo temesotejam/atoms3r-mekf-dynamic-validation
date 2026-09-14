@@ -8,13 +8,13 @@ runner = Path('src/experiment_runner.cpp').read_text(encoding='utf-8')
 web = Path('src/web_ui.cpp').read_text(encoding='utf-8')
 manifest = Path('site/manifest.json').read_text(encoding='utf-8')
 
-assert 'v46k_pulse_start_timing_probe_20260914' in config
+assert 'v46l_fast_solver_shadow_20260914' in config
 assert 'ROLLER_IO_TASK_CORE = 0' in config
 assert 'ROLLER_IO_TASK_PRIORITY = 4' in config
 assert 'ROLLER_IO_TASK_STACK_BYTES = 6144UL' in config
 assert 'ROLLER_IO_RETRY_PERIOD_MS = 100UL' in config
 assert 'ROLLER_IO_RECOVERY_ERROR_LIMIT = 3' in config
-assert 'AtomS3R V46k MEKF dual-core motor validation' in main
+assert 'AtomS3R V46l MEKF dual-core motor validation' in main
 assert 'roller.startIoTask(' in main
 assert 'roller.stop();' not in main
 assert 'roller.update();' not in main
@@ -52,9 +52,9 @@ assert 'roller_io_task_init_failed' in web
 assert 'roller_io_init_attempt_count' in web
 assert 'roller_io_recovery_count' in web
 assert 'roller_command_latency_max_us' in web
-assert 'AtomS3R V46k MEKF Motor Validation' in manifest
-assert '"version": "0.46.10"' in manifest
-print('V46k dual-core Roller READY guards passed')
+assert 'AtomS3R V46l MEKF Motor Validation' in manifest
+assert '"version": "0.46.11"' in manifest
+print('V46l dual-core Roller READY guards passed')
 
 # Initialization/recovery must be self-healing, not one-shot.
 assert 'for (;;)' in roller_cpp

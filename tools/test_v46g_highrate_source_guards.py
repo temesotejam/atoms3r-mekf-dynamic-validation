@@ -13,7 +13,7 @@ for token in (
     "IMU_POLL_PERIOD_US = 1000UL", "BMI270_GYRO_ODR_HZ = 400", "BMI270_ACCEL_ODR_HZ = 200",
     "BMI270_GYRO_ODR_CODE = 0x0A", "BMI270_ACCEL_ODR_CODE = 0x09",
     "MEKF_CONTROL_PREDICTION_FIXED_US = 2500UL", "MEKF_CONTROL_PREDICTION_MAX_US = 10000UL",
-    "v46k_pulse_start_timing_probe_20260914"):
+    "v46l_fast_solver_shadow_20260914"):
     assert token in config, token
 for token in ("M5.Imu.getType() != m5::imu_bmi270", "getImuInstancePtr(0)", "sensor_mask_accel",
               "sensor_mask_gyro", "accel_sequence", "gyro_sequence"):
@@ -26,7 +26,7 @@ assert "raw_mekf_predicted_abs_deg_" in runner
 assert "status_.pitch_mekf_deg = raw_mekf_predicted_abs_deg_ - offset_mekf_pitch_deg_" in runner
 assert "status_.pitch_mekf_abs_deg = raw_mekf_pitch_abs_deg_" in runner
 assert "r.accel_sequence != g_v46_mekf_run_reinit.last_accel_sequence" in runner
-print("V46k high-rate / forward-prediction source guards passed")
+print("V46l high-rate / forward-prediction source guards passed")
 
 web = Path("src/web_ui.cpp").read_text(encoding="utf-8")
 assert "displayFrozen||refreshInFlight" in web

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Static guards for the motor-driven V46k attitude-validation path."""
+"""Static guards for the motor-driven V46l attitude-validation path."""
 
 from pathlib import Path
 
@@ -52,7 +52,7 @@ def main() -> None:
     ):
         assert token in runner, token
 
-    # V46k preserves fail-closed motor authority across the Core-1 -> Core-0 queue.
+    # V46l preserves fail-closed motor authority across the Core-1 -> Core-0 queue.
     for token in (
         "xQueueReset(command_queue_)",
         "requested_current_mA_ = 0",
@@ -109,12 +109,12 @@ def main() -> None:
 
     assert "const bool v46_mekf_dynamic_compare = energy_control_autonomous_mode_" in runner
     assert "pitch_madgwick_dynamic_abs_deg" in runner
-    assert "v46k_pulse_start_timing_probe_20260914" in config
-    assert "AtomS3R V46k MEKF dual-core motor validation" in main_cpp
+    assert "v46l_fast_solver_shadow_20260914" in config
+    assert "AtomS3R V46l MEKF dual-core motor validation" in main_cpp
     assert "DUAL-CORE V7" in main_cpp
     assert "motor output OFF" not in main_cpp
 
-    print("V46k dual-core physical-frame motor validation source guards passed")
+    print("V46l dual-core physical-frame motor validation source guards passed")
 
 
 if __name__ == "__main__":

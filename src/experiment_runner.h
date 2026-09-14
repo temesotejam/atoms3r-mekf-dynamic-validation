@@ -370,6 +370,7 @@ private:
                                                  float crossing_alpha,
                                                  float interpolated_time_ms);
   void updateEnergyControlAutonomousPulse(uint32_t now_ms);
+  void runEnergyControlAutonomousSolverShadow();
   bool beginEnergyControlAutonomousPulse(uint32_t now_ms, uint32_t t_test_ms,
                                          int8_t direction, uint16_t pulse_width_ms);
   bool beginEnergyControlAutonomousStartKickPulse(uint32_t now_ms, int8_t direction);
@@ -512,6 +513,8 @@ private:
   bool energy_control_autonomous_pending_saturated_upper_ = false;
   bool energy_control_autonomous_pending_saturated_lower_ = false;
   uint16_t energy_control_autonomous_pending_zero_event_index_ = 0;
+  PsramLogger::SolverShadowEvent solver_shadow_event_{};
+  bool solver_shadow_pending_ = false;
   PsramLogger::TimingProbeEvent timing_probe_event_{};
   bool timing_probe_pending_ = false;
   bool timing_probe_loop_captured_ = false;

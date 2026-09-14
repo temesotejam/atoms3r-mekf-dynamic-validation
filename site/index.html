@@ -4,24 +4,24 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#111827">
-  <title>AtomS3R V46k MEKF Motor Validation</title>
+  <title>AtomS3R V46l MEKF Motor Validation</title>
   <link rel="stylesheet" href="styles.css">
   <script type="module" src="https://unpkg.com/esp-web-tools@10.1.1/dist/web/install-button.js?module"></script>
 </head>
 <body>
   <main class="shell">
     <header class="hero">
-      <p class="eyebrow">ATOMS3R / V46k / MOTOR-DRIVEN VALIDATION</p>
+      <p class="eyebrow">ATOMS3R / V46l / MOTOR-DRIVEN VALIDATION</p>
       <h1>MEKF Motor Validation<br><span>Web Flasher</span></h1>
-      <p class="lead">Autonomous Energy Control V7 を実際にモータ駆動しながら、MEKF と dynamic-beta Madgwick を同時記録する V46k ファームウェアです。AtomS3R内蔵BMI270をGyro 400 Hz / Accel 200 Hzで使用し、MEKFは新しいGyroごとにpredict、新しいAccelが来たときだけ補正します。さらにposterior状態を保持したまま、制御用だけ短時間先へ非破壊予測します。</p>
-      <div class="badges"><span>ESP32-S3</span><span>BMI270 400/200 Hz</span><span>RWLOG v46</span><span>V46k Ry180</span><span>predicted control</span></div>
+      <p class="lead">Autonomous Energy Control V7 を実際にモータ駆動しながら、MEKF と dynamic-beta Madgwick を同時記録する V46l ファームウェアです。AtomS3R内蔵BMI270をGyro 400 Hz / Accel 200 Hzで使用し、MEKFは新しいGyroごとにpredict、新しいAccelが来たときだけ補正します。さらにposterior状態を保持したまま、制御用だけ短時間先へ非破壊予測します。</p>
+      <div class="badges"><span>ESP32-S3</span><span>BMI270 400/200 Hz</span><span>RWLOG v46</span><span>V46l Ry180</span><span>predicted control</span></div>
     </header>
 
     <section class="panel important">
       <h2>このページから直接書き込めます</h2>
       <p>AtomS3R を USB でPCへ接続し、Chrome または Edge のデスクトップ版で下のボタンを押してください。</p>
       <esp-web-install-button manifest="manifest.json">
-        <button slot="activate" class="primary">AtomS3RへV46kを書き込む</button>
+        <button slot="activate" class="primary">AtomS3RへV46lを書き込む</button>
         <span slot="unsupported" class="warning">このブラウザはWeb Serial / WebUSBに対応していません。PC版ChromeまたはEdgeを使用してください。</span>
       </esp-web-install-button>
       <details>
@@ -47,8 +47,8 @@
     </section>
 
     <section class="panel">
-      <h2>V46kのIMU座標と更新</h2>
-      <p>実機の立位ではRaw IMUの重力がほぼ−Z方向で、動画の物理Pitch角速度は+raw gyと一致しました。V46kでは右手系を保つ <code>R_y(π)=diag(-1,+1,-1)</code> を用います。</p>
+      <h2>V46lのIMU座標と更新</h2>
+      <p>実機の立位ではRaw IMUの重力がほぼ−Z方向で、動画の物理Pitch角速度は+raw gyと一致しました。V46lでは右手系を保つ <code>R_y(π)=diag(-1,+1,-1)</code> を用います。</p>
       <div class="grid">
         <article><strong>Accel</strong><p><code>(-ax, +ay, -az)</code></p></article>
         <article><strong>Gyro</strong><p><code>(-gx, +gy×0.908911, -gz)</code></p></article>
@@ -69,11 +69,11 @@
 
     <section class="panel safety">
       <h2>実機動作について</h2>
-      <p>このV46kはモータを実際に駆動します。可動部から手・ケーブル・治具を離し、異常時は実験画面の <strong>Emergency stop</strong> を使用してください。</p>
-      <p>Attitude revision: <code>v46k_pulse_start_timing_probe_20260914</code></p>
+      <p>このV46lはモータを実際に駆動します。可動部から手・ケーブル・治具を離し、異常時は実験画面の <strong>Emergency stop</strong> を使用してください。</p>
+      <p>Attitude revision: <code>v46l_fast_solver_shadow_20260914</code></p>
     </section>
 
-    <footer>atoms3r-mekf-dynamic-validation / V46k</footer>
+    <footer>atoms3r-mekf-dynamic-validation / V46l</footer>
   </main>
 </body>
 </html>
