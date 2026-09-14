@@ -15,16 +15,22 @@ jobs:
           python-version: "3.x"
       - name: Install PlatformIO
         run: pip install --upgrade platformio
-      - name: Verify V46j validation identity
-        run: grep -R -q "v46j_mekf_dual_core_roller_ready_20260913" src
+      - name: Verify V46j/V46k validation identity
+        run: grep -R -E -q "(v46j_mekf_dual_core_roller_ready_20260913|v46k_pulse_start_timing_probe_20260914)" src
       - name: Run V46 source guard
         run: python tools/test_current_audit_source_guards.py
-      - name: Run V46j motor-path guard
+      - name: Run V46 motor-path guard
         run: python tools/test_v46_motor_validation_source_guards.py
-      - name: Run V46j high-rate guard
+      - name: Run V46 high-rate guard
         run: python tools/test_v46g_highrate_source_guards.py
-      - name: Run V46j task/recovery guard
+      - name: Run V46 task/recovery guard
         run: python tools/test_v46i_task_split_source_guards.py
+      - name: Run optional V46k timing-probe guard
+        shell: bash
+        run: |
+          if test -f tools/test_v46k_timing_probe_source_guards.py; then
+            python tools/test_v46k_timing_probe_source_guards.py
+          fi
       - name: Run RWLOG v46 regression
         run: python tools/test_rwlog_v46_converter.py
       - name: Check V46 analysis tool
@@ -50,7 +56,7 @@ jobs:
             0xe000 dist/boot_app0.bin \
             0x10000 dist/firmware.bin
           printf '%s\n' \
-            'AtomS3R V46j MEKF 400Hz gyro / 200Hz accel / predicted-control / self-healing Core0 Roller I/O flash layout' \
+            'AtomS3R V46j/V46k MEKF 400Hz gyro / 200Hz accel / predicted-control / self-healing Core0 Roller I/O flash layout' \
             '0x0000  bootloader.bin' \
             '0x8000  partitions.bin' \
             '0xe000  boot_app0.bin' \
@@ -58,10 +64,10 @@ jobs:
             'merged-firmware.bin: write at 0x0000' \
             > dist/FLASH_LAYOUT.txt
           (cd dist && sha256sum bootloader.bin partitions.bin boot_app0.bin firmware.bin merged-firmware.bin > SHA256SUMS.txt)
-      - name: Upload flashable V46j firmware
+      - name: Upload flashable V46 diagnostic firmware
         uses: actions/upload-artifact@v4
         with:
-          name: atoms3r-v46j-mekf-400hz-dual-core-self-healing-${{ github.sha }}
+          name: atoms3r-v46-timing-diagnostic-${{ github.sha }}
           path: dist/
           if-no-files-found: error
           retention-days: 30
