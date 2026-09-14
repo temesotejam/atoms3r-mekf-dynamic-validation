@@ -3,7 +3,7 @@ from pathlib import Path
 path = Path("src/psram_logger.cpp")
 text = path.read_text(encoding="utf-8")
 
-helper = '''String jsonFloatOrNull(float value, uint8_t decimals) {
+helper = '''String jsonFloatOrNull(float value, unsigned int decimals) {
   return isfinite(value) ? String(value, decimals) : String("null");
 }
 '''
