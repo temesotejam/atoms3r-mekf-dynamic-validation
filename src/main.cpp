@@ -52,16 +52,28 @@ static void updateStartupPoseGuide() {
   }
   digitalWrite(Config::SYNC_LED_PIN, HIGH);
   const ImuReading& r = imu.reading();
-  if (!UprightPoseGuide::isUprightStableSample(r)) {
+  const bool fresh = imu.ok() && r.last_gyro_update_us != 0 &&
+      static_cast<uint32_t>(micros() - r.last_gyro_update_us) <= 10000UL;
+  const char* reason = "stable_hold";
+  if (!imu.acquisitionHealthy()) reason = "imu_init_or_latched_fault";
+  else if (!fresh) reason = "waiting_fresh_imu";
+  else if (UprightPoseGuide::accelNormG(r) < UprightPoseGuide::UPRIGHT_MIN_ACCEL_NORM_G ||
+           UprightPoseGuide::accelNormG(r) > UprightPoseGuide::UPRIGHT_MAX_ACCEL_NORM_G) reason = "accel_norm_out_of_range";
+  else if (UprightPoseGuide::directionErrorDeg(r) > UprightPoseGuide::UPRIGHT_MAX_DIRECTION_ERROR_DEG) reason = "not_upright";
+  else if (UprightPoseGuide::gyroNormDps(r) > UprightPoseGuide::UPRIGHT_MAX_GYRO_NORM_DPS) reason = "still_moving";
+  imu.setStartupGuideState(reason, false, 0);
+  if (!fresh || !UprightPoseGuide::isUprightStableSample(r)) {
     startup_upright_since_ms = 0;
     return;
   }
   if (startup_upright_since_ms == 0) startup_upright_since_ms = now_ms;
+  imu.setStartupGuideState("stable_hold", false, now_ms - startup_upright_since_ms);
   if (static_cast<uint32_t>(now_ms - startup_upright_since_ms) <
       UprightPoseGuide::UPRIGHT_STABLE_HOLD_MS) {
     return;
   }
   startup_upright_confirmed = true;
+  imu.setStartupGuideState("upright_ready", true, now_ms - startup_upright_since_ms);
   digitalWrite(Config::SYNC_LED_PIN, LOW);
   Serial.printf("Startup guide: upright confirmed; gravity error=%.2f deg, norm=%.3f g\n",
                 UprightPoseGuide::directionErrorDeg(r), UprightPoseGuide::accelNormG(r));
@@ -77,20 +89,20 @@ void setup() {
   Serial.println();
   // V46l is the frozen controller/attitude baseline, not the acquisition revision.
   Serial.println("AtomS3R V46l MEKF dual-core motor validation");
-  Serial.println("V46n acquisition 0.46.13: priority BMI270 task / timestamped queue");
+  Serial.println("V46o acquisition 0.46.14: priority BMI270 task / timestamped queue");
   Serial.printf("IMU consumer: core=%d priority=%u; BMI270 reader core=1 priority=6\n",
                 xPortGetCoreID(), static_cast<unsigned>(uxTaskPriorityGet(nullptr)));
 
   auto cfg = M5.config();
   cfg.serial_baudrate = 0;
-  cfg.internal_imu = true;
+  cfg.internal_imu = false;  // ImuManager initializes once, with bounded cold-start validation/retries.
   M5.begin(cfg);
   Serial.printf("V46l identity: board=%d imu_type=%d M5Unified=%s M5GFX=%s AHRS=%s base=%s attitude=%s\n",
                 static_cast<int>(M5.getBoard()), static_cast<int>(M5.Imu.getType()),
                 Config::RESOLVED_M5UNIFIED_VERSION, Config::RESOLVED_M5GFX_VERSION,
                 Config::RESOLVED_ADAFRUIT_AHRS_VERSION, Config::V62_BASE_COMMIT,
                 Config::ATTITUDE_VALIDATION_REVISION);
-  displayLine("V46n IMU", "DUAL-CORE V7");
+  displayLine("V46o IMU", "DUAL-CORE V7");
 
   const bool psram_ok = logger.begin();
   Serial.printf("PSRAM: %s total=%u free=%u sample_capacity=%u\n", psram_ok ? "OK" : "FAILED",
@@ -115,12 +127,13 @@ void setup() {
   web.begin(server, runner, imu, roller, logger);
   Serial.printf("AP SSID: %s\n", Config::AP_SSID);
   Serial.println("Open http://192.168.4.1/ and start Autonomous Energy Control V7");
-  displayLine("V46n / V7 ready", Config::AP_SSID);
+  displayLine("V46o / V7 ready", Config::AP_SSID);
 }
 
 static void updateAcquisitionContext() {
   imu.setAcquisitionContext(runner.running(),
-      runner.status().state == ExperimentState::RUNNING_BATCH_SWEEP);
+      runner.status().state == ExperimentState::RUNNING_BATCH_SWEEP,
+      static_cast<uint8_t>(runner.status().state));
 }
 static void checkAcquisitionHealth() {
   // Added fail-closed condition; the established start and motor gates remain.

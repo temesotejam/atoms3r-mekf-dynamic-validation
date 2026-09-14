@@ -9,7 +9,7 @@ log_types = Path("src/log_types.h").read_text(encoding="utf-8")
 manifest = Path("site/manifest.json").read_text(encoding="utf-8")
 
 assert "v46l_fast_solver_shadow_20260914" in config
-assert '"version": "0.46.13"' in manifest
+assert '"version": "0.46.14"' in manifest
 
 # Physical/control configuration remains frozen from V46k.
 for token in (

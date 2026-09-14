@@ -29,5 +29,10 @@ assert "r.accel_sequence != g_v46_mekf_run_reinit.last_accel_sequence" in runner
 print("V46l high-rate / forward-prediction source guards passed")
 
 web = Path("src/web_ui.cpp").read_text(encoding="utf-8")
-assert "displayFrozen||refreshInFlight" in web
-assert "setTimeout(()=>{displayFrozen=false;refresh();},41000)" in web
+assert "if(refreshInFlight)return;" in web
+# V46o: a bounded, fixed-size heartbeat replaces the 41-second blind pause.
+assert "setInterval(refresh,1000)" in web
+status_region = web[web.index("void WebUi::handleStatus()"):web.index("void WebUi::handleStartPassive()")]
+assert "char body[192]" in status_region
+assert status_region.index("return;") < status_region.index("statusJson()")
+assert "41000" not in web

@@ -6,6 +6,7 @@
 #include <freertos/queue.h>
 #include <esp_timer.h>
 #include "imu_acquisition_audit.h"
+#include "imu_startup_boundary.h"
 
 struct ImuReading {
   bool imu_ok = false;
@@ -57,8 +58,10 @@ class ImuManager {
  public:
   bool begin();
   void update();  // Consume only. Never performs sensor I/O.
-  void setAcquisitionContext(bool sequential, bool measurement);
+  void setAcquisitionContext(bool sequential, bool measurement, uint8_t state_id = 0);
   bool acquisitionHealthy() const;
+  String startupDiagnosticsJson() const;
+  void setStartupGuideState(const char* reason, bool confirmed, uint32_t hold_ms);
   String acquisitionDiagnosticsJson() const;
   void zeroPitch();
   void setDynamicBetaContext(bool pulse_active, uint32_t time_since_last_pulse_ms, bool pre_start_stabilize = false);
@@ -76,11 +79,13 @@ class ImuManager {
   static constexpr uint8_t kReaderPriority = 6;
   static void timerCallback(void* arg);
   static void taskEntry(void* arg);
+  bool initializeSensorAttempt();
   bool startAcquisition();
   void acquisitionLoop();
   void captureSensor();
   void publishSample();
-  void latchFault(const char* reason);
+  void latchFault(const char* reason, uint32_t sample_us = 0,
+                  uint32_t age_us = 0, uint32_t depth = 0);
 
   // After begin(), the producer exclusively owns capture_ and M5.Imu.
   // The Arduino thread exclusively owns reading_, beta context and last_error_.
@@ -102,6 +107,23 @@ class ImuManager {
   alignas(4) uint8_t queue_bytes_[kQueueLength * sizeof(ImuReading)];
   mutable portMUX_TYPE mux_ = portMUX_INITIALIZER_UNLOCKED;
   bool sequential_ = false;
+  ImuStartupBoundary boundary_;  // Consumer-owned; never resets a live-run queue.
+  uint32_t latest_capture_sequence_ = 0;
+  uint32_t boundary_producer_discards_ = 0;
+  uint8_t context_state_ = 0;
+  uint32_t start_sync_deliveries_ = 0, start_sync_age_max_us_ = 0;
+  uint32_t init_attempts_ = 0, init_valid_accel_ = 0, init_valid_gyro_ = 0;
+  uint8_t init_internal_status_ = 0, init_power_ctrl_ = 0;
+  const char* init_last_failure_ = "";
+  const char* startup_guide_reason_ = "initializing";
+  bool startup_guide_confirmed_ = false;
+  uint32_t startup_guide_hold_ms_ = 0;
+  struct FaultSnapshot {
+    uint32_t time_us = 0, sample_us = 0, age_us = 0, queue_depth = 0;
+    uint32_t latest_sequence = 0;
+    uint8_t state_id = 0;
+  } fault_snapshot_;
+
   bool fault_ = false;  // Latched; a fault requires a reboot, never automatic re-arm.
   const char* fault_reason_ = "";
   uint32_t latest_capture_ms_ = 0;
