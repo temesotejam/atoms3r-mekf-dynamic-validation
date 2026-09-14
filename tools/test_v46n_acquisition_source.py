@@ -53,4 +53,23 @@ manifest = json.loads(text('site/manifest.json'))
 assert manifest['version'] == '0.46.13'
 assert 'V46n' in manifest['name']
 assert 'v46n_priority_imu_20260914' in text('site/index.html')
+
+# Scheduling is explicit. Both threads block instead of continuously spinning.
+assert 'kConsumerPriority = 2;' in main
+assert 'vTaskPrioritySet(nullptr, kConsumerPriority);' in main
+assert 'xQueueReceive(sample_queue_, &next, 1)' in consumer
+assert 'static_assert(configTICK_RATE_HZ == 1000' in imu
+reader_loop = imu[imu.index('void ImuManager::acquisitionLoop()'):imu.index('void ImuManager::captureSensor()')]
+assert 'ulTaskNotifyTake(pdTRUE, portMAX_DELAY)' in reader_loop
+assert 'if (elapsed >= Config::IMU_POLL_PERIOD_US) vTaskDelay(1);' in reader_loop
+
+# The reader may publish a new millisecond timestamp after a caller captured now.
+# Compare the sensor snapshot with a clock read after it, keeping the stale limit.
+freshness = imu[imu.index('bool ImuManager::stale('):imu.index('void ImuManager::zeroPitch()')]
+assert freshness.index('const uint32_t stamp =') < freshness.index('const uint32_t check_now_ms = millis();')
+assert 'static_cast<uint32_t>(check_now_ms - stamp_ms) > Config::IMU_STALE_LIMIT_MS' in freshness
+assert '!acquisitionHealthy() || stamp == 0 ||' in freshness
+assert 'reading_.accel_fresh = reading_.accel_sequence != previous_accel_sequence;' in consumer
+
 print('V46n exclusive ownership, bounded delivery and exact preserved control baseline PASS')
+print('Reader priority 6 > consumer priority 2; bounded waits and coherent freshness PASS')
