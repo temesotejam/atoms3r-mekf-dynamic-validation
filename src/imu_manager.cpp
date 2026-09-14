@@ -4,7 +4,7 @@
 #include "config.h"
 #include "upright_pose_guide.h"
 
-static_assert(configTICK_RATE_HZ == 1000, "V46o requires one-millisecond RTOS ticks");
+static_assert(configTICK_RATE_HZ == 1000, "V46p requires one-millisecond RTOS ticks");
 
 bool ImuManager::begin() {
   // Startup retries ONLY, before a reader/task is created. Runtime faults are
@@ -394,7 +394,7 @@ String ImuManager::acquisitionDiagnosticsJson() const {
   const auto& a = audit_snapshot_;
   String json;
   json.reserve(10000);
-  json = "{\"revision\":\"v46o_startup_boundary_20260914\",\"firmware_version\":\"0.46.14\"";
+  json = "{\"revision\":\"v46p_run_control_worker_20260914\",\"firmware_version\":\"0.46.15\"";
   json += ",\"timestamp_semantics\":\"M5Unified_host_acquisition_not_sensor_clock\"";
   json += ",\"motor_controller\":\"unchanged_V46l_legacy_V7\"";
   json += ",\"reader_core\":" + String(reader_core) + ",\"reader_priority\":" + String(reader_priority);

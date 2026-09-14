@@ -9,6 +9,7 @@
 #include "roller485_manager.h"
 #include "upright_pose_guide.h"
 #include "web_ui.h"
+#include "run_control_worker.h"
 
 WebServer server(Config::HTTP_PORT);
 PsramLogger logger;
@@ -16,9 +17,14 @@ ImuManager imu;
 Roller485Manager roller;
 ExperimentRunner runner;
 WebUi web;
+RunControlWorker run_control;
+
+static bool runControlStep(void*);
+static void captureRunState(void*, RunControlSnapshot&);
 
 static constexpr UBaseType_t kConsumerPriority = 2;
-static_assert(kConsumerPriority < 6, "BMI270 reader must preempt the consumer");
+static_assert(kConsumerPriority < RunControlWorker::kPriority, "Run control must preempt HTTP");
+static_assert(RunControlWorker::kPriority < 6, "BMI270 reader must preempt run control");
 
 static uint32_t startup_guide_boot_ms = 0;
 static uint32_t startup_upright_since_ms = 0;
@@ -89,7 +95,7 @@ void setup() {
   Serial.println();
   // V46l is the frozen controller/attitude baseline, not the acquisition revision.
   Serial.println("AtomS3R V46l MEKF dual-core motor validation");
-  Serial.println("V46o acquisition 0.46.14: priority BMI270 task / timestamped queue");
+  Serial.println("V46p acquisition 0.46.15: priority BMI270 task / timestamped queue");
   Serial.printf("IMU consumer: core=%d priority=%u; BMI270 reader core=1 priority=6\n",
                 xPortGetCoreID(), static_cast<unsigned>(uxTaskPriorityGet(nullptr)));
 
@@ -102,7 +108,7 @@ void setup() {
                 Config::RESOLVED_M5UNIFIED_VERSION, Config::RESOLVED_M5GFX_VERSION,
                 Config::RESOLVED_ADAFRUIT_AHRS_VERSION, Config::V62_BASE_COMMIT,
                 Config::ATTITUDE_VALIDATION_REVISION);
-  displayLine("V46o IMU", "DUAL-CORE V7");
+  displayLine("V46p IMU", "DUAL-CORE V7");
 
   const bool psram_ok = logger.begin();
   Serial.printf("PSRAM: %s total=%u free=%u sample_capacity=%u\n", psram_ok ? "OK" : "FAILED",
@@ -124,10 +130,13 @@ void setup() {
                 Config::ROLLER_IO_TASK_CORE, Config::ROLLER_IO_TASK_PRIORITY);
 
   runner.begin(logger, imu, roller);
+  const bool control_task_ok = run_control.begin(runControlStep, captureRunState, nullptr);
+  Serial.printf("Run control worker: %s core=1 priority=4; HTTP core=1 priority=2\n",
+                control_task_ok ? "OK" : "FAILED");
   web.begin(server, runner, imu, roller, logger);
   Serial.printf("AP SSID: %s\n", Config::AP_SSID);
   Serial.println("Open http://192.168.4.1/ and start Autonomous Energy Control V7");
-  displayLine("V46o / V7 ready", Config::AP_SSID);
+  displayLine("V46p / V7 ready", Config::AP_SSID);
 }
 
 static void updateAcquisitionContext() {
@@ -142,40 +151,78 @@ static void checkAcquisitionHealth() {
   }
 }
 
-void loop() {
+static void captureRunState(void*, RunControlSnapshot& out) {
+  const auto& st = runner.status();
+  out.running = runner.running();
+  out.state_id = static_cast<uint8_t>(st.state);
+  out.run_id = st.run_id;
+  out.motor_cmd_mA = st.motor_cmd_mA;
+  out.actual_current_mA = st.roller_actual_current_mA;
+  out.remaining_ms = st.remaining_ms;
+  snprintf(out.state_name, sizeof(out.state_name), "%s", runner.stateName());
+  snprintf(out.last_error, sizeof(out.last_error), "%s", st.last_error ? st.last_error : "");
+}
+
+static bool runControlStep(void*) {
   const uint32_t loop_start_us = micros();
   updateAcquisitionContext();
-
-  // Core 1 priority-6 producer owns sensor I/O and can preempt this consumer.
-  // Core 1 priority-2 consumer owns MEKF, unchanged V7 solver, logging and Web.
-  // Core 0 continues to own all Roller motor commands and current audit.
+  if (run_control.takeStopRequest()) {
+    runner.requestEmergencyStop("web_estop");
+    updateAcquisitionContext();
+    run_control.recordStep(loop_start_us, 0, 0, static_cast<uint32_t>(micros() - loop_start_us));
+    return false;
+  }
   runner.serviceFast();
   runner.updateImuDynamicBetaContext();
   const bool v46k_timing_probe_active = runner.energyControlAutonomousMode() && runner.running();
-  if (v46k_timing_probe_active) {
-    const uint32_t imu_t0_us = micros();
-    imu.update();
-    checkAcquisitionHealth();
-    const uint32_t imu_update_us = static_cast<uint32_t>(micros() - imu_t0_us);
-    const uint32_t runner_t0_us = micros();
-    runner.update();
-    const uint32_t runner_update_us = static_cast<uint32_t>(micros() - runner_t0_us);
-    runner.recordTimingProbeLoop(imu_update_us, runner_update_us,
-                                 static_cast<uint32_t>(micros() - loop_start_us));
-  } else {
-    imu.update();
-    checkAcquisitionHealth();
-    runner.update();
-  }
+  const uint32_t imu_t0_us = micros();
+  imu.update();
+  checkAcquisitionHealth();
+  const uint32_t imu_update_us = static_cast<uint32_t>(micros() - imu_t0_us);
+  const uint32_t runner_t0_us = micros();
+  runner.update();
+  const uint32_t runner_update_us = static_cast<uint32_t>(micros() - runner_t0_us);
+  const uint32_t path_us = static_cast<uint32_t>(micros() - loop_start_us);
+  if (v46k_timing_probe_active) runner.recordTimingProbeLoop(imu_update_us, runner_update_us, path_us);
+  runner.setLoopDt(path_us);
   updateAcquisitionContext();
+  run_control.recordStep(loop_start_us, imu_update_us, runner_update_us, path_us);
+  return runner.running();
+}
 
+void loop() {
+  // While a run is active, this lower-priority Arduino task owns only HTTP.
+  // Never put a mutex around handleClient and the controller: that would
+  // reintroduce network waits into the IMU-consumer deadline.
+  if (run_control.active()) {
+    web.update();
+    delay(1);
+    return;
+  }
+
+  // Idle ownership is exclusive again after the worker's final snapshot.
+  const uint32_t loop_start_us = micros();
+  updateAcquisitionContext();
+  runner.serviceFast();
+  runner.updateImuDynamicBetaContext();
+  imu.update();
+  checkAcquisitionHealth();
+  runner.update();
   if (!runner.running()) {
     M5.update();
     updateStartupPoseGuide();
   }
-  // Keep emergency-stop HTTP handling in the same single control-owner thread.
-  web.update();
-  updateAcquisitionContext();
   runner.setLoopDt(static_cast<uint32_t>(micros() - loop_start_us));
+  web.update();
+
+  // Establish the V46p boundary after the Start HTTP response. Then transfer
+  // ownership exactly once; never touch the live controller after start().
+  if (runner.running()) {
+    updateAcquisitionContext();
+    if (!run_control.start()) {
+      runner.requestEmergencyStop("run_control_worker_not_ready");
+      updateAcquisitionContext();
+    }
+  }
   taskYIELD();
 }

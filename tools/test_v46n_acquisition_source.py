@@ -50,9 +50,9 @@ assert 'capture_.' not in consumer
 assert 'v46n_imu_acquisition' in text('src/psram_logger.cpp')
 assert 'acquisitionDiagnosticsJson()' in text('src/web_ui.cpp')
 manifest = json.loads(text('site/manifest.json'))
-assert manifest['version'] == '0.46.14'
-assert 'V46o' in manifest['name']
-assert 'v46o_startup_boundary_20260914' in text('site/index.html')
+assert manifest['version'] == '0.46.15'
+assert 'V46p' in manifest['name']
+assert 'v46p_run_control_worker_20260914' in text('site/index.html')
 
 # Scheduling is explicit. Both threads block instead of continuously spinning.
 assert 'kConsumerPriority = 2;' in main
@@ -74,7 +74,7 @@ assert 'reading_.accel_fresh = reading_.accel_sequence != previous_accel_sequenc
 print('V46n exclusive ownership, bounded delivery and exact preserved control baseline PASS')
 print('Reader priority 6 > consumer priority 2; bounded waits and coherent freshness PASS')
 
-# V46o: preserve runtime stops; separate pre-start idle history instead.
+# V46p: preserve runtime stops; separate pre-start idle history instead.
 assert 'boundary_.enter(now_us, latest_capture_sequence_)' in imu
 assert 'sequential && !sequential_' in imu
 assert 'boundary_.accepts(next.gyro_sequence)' in consumer
@@ -87,7 +87,8 @@ assert 'first_fault' in imu and 'start_sync_age_max_us' in imu
 assert 'startupDiagnosticsJson()' in text('src/web_ui.cpp')
 web = text('src/web_ui.cpp')
 status = web[web.index('void WebUi::handleStatus()'):web.index('void WebUi::handleStartPassive()')]
-assert status.index('if (runner_->running())') < status.index('statusJson()')
+assert status.index('if (run_control.active())') < status.index('statusJson()')
 assert 'char body[192]' in status
+assert 'run_control.snapshot()' in status
 assert '41000' not in web and 'if(displayFrozen||refreshInFlight)' not in web
-print('V46o startup boundary, cold-start validation, first-fault diagnostics and lean status PASS')
+print('V46p startup boundary, cold-start validation, first-fault diagnostics and lean status PASS')
