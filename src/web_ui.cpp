@@ -3,12 +3,14 @@
 #include <WiFi.h>
 
 #include "config.h"
+#include "upright_pose_guide.h"
 
 static const char INDEX_HTML[] PROGMEM = R"HTML(
 <!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Autonomous Energy Control V7</title><style>
 body{margin:0;font-family:system-ui,sans-serif;background:#f6f8fb;color:#17202a}header{padding:14px 16px;background:#263341;color:#fff}main{padding:14px;max-width:700px;margin:auto}.card{border:1px solid #b8c2ce;background:#fff;padding:14px;border-radius:7px;margin:12px 0}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.metric{background:#f6f8fb;border-radius:5px;padding:9px}.metric b{display:block;font-size:1.18rem}.yes{color:#087d2f}.no{color:#a11d27}button,a,select,input{box-sizing:border-box;width:100%;margin-top:10px;border:1px solid #b8c2ce;background:#1769e0;color:#fff;padding:11px;border-radius:6px;font-size:16px;text-align:center;text-decoration:none}select{background:#fff;color:#17202a}button.danger{background:#c4262e;border-color:#c4262e}button:disabled,a.disabled,select:disabled{opacity:.42;pointer-events:none}small{display:block;line-height:1.45;margin:9px 0;color:#536273}</style></head><body>
-<header><h1>Autonomous Energy Control V7</h1><div>V46n / 0.46.13 / priority IMU acquisition</div></header><main><p id="summary">Connecting...</p>
+<header><h1>Autonomous Energy Control V7</h1><div>V46o / 0.46.14 / priority IMU acquisition</div></header><main><p id="summary">Connecting...</p>
+<div class="card"><b>起動・立位診断</b><p id="startupInfo">IMUを初期化しています</p><a href="/imu-acquisition.json">停止中のIMU診断JSON</a><p id="errorInfo"></p></div>
 <div class="card"><b>Current Roll (static-calibrated display)</b><div class="grid"><div class="metric">Physical Roll Abs<b id="abs">--</b></div><div class="metric">Current Roll<b id="current">--</b></div><div class="metric">Physical Rate<b id="rate">--</b></div><div class="metric">Target / Error<b id="targetError">--</b></div><div class="metric">STATIC<b id="static">--</b></div><div class="metric">READY<b id="ready">--</b></div></div><button id="zero" onclick="zeroCurrentRoll()">ZERO Current Roll (display only)</button><label for="target">Target Current Roll</label><select id="target" onchange="setTarget()"><option value="-15">-15 deg</option><option value="-12">-12 deg</option><option value="-8">-8 deg</option><option value="-4">-4 deg</option><option value="-1.5">-1.5 deg</option><option value="0" selected>0 deg</option><option value="1.5">+1.5 deg</option><option value="4">+4 deg</option><option value="8">+8 deg</option><option value="12">+12 deg</option><option value="15">+15 deg</option></select><small id="criteria">Display-only current-roll UI. ZERO and READY never change the V0 absolute energy target or motor command.</small></div>
 <div class="card"><b>Q1 direct next-peak shadow (motor OFF)</b><small>Q1 shadow remains a diagnostic. Its target does not affect the V0 motor command.</small><label for="shadowTarget">Q1 shadow target |A| (deg)</label><input id="shadowTarget" type="number" min="0" max="18" step="0.1" value="0.0" onchange="setShadowTarget()"></div>
 <div class="card"><b>Passive release capture (0 mA)</b><small>Records a one-release free-decay reference. All samples remain motor/current/pulse = 0.</small><button id="passive" onclick="startPassive()">Start passive capture</button></div>
@@ -16,9 +18,9 @@ body{margin:0;font-family:system-ui,sans-serif;background:#f6f8fb;color:#17202a}
 <button id="stop" class="danger" onclick="postStop()">Emergency stop</button><a id="rwlog" href="/download/rwlog" onclick="beginDownload()">Download RWLOG</a><button id="clear" onclick="postClear()">Clear log memory</button></main><script>
 let downloading=false,lastStatus={},displayFrozen=false,refreshInFlight=false;const energy=document.getElementById('energy'),energyTarget=document.getElementById('energyTarget'),passive=document.getElementById('passive'),stop=document.getElementById('stop'),clear=document.getElementById('clear'),rwlog=document.getElementById('rwlog'),zero=document.getElementById('zero'),target=document.getElementById('target'),shadowTarget=document.getElementById('shadowTarget');
 const fmt=(v,n=2)=>Number.isFinite(Number(v))?`${Number(v).toFixed(n)} deg`:'--';function lock(e,v){if(e.tagName==='A')e.classList.toggle('disabled',v);else e.disabled=v;}async function post(path){const r=await fetch(path,{method:'POST'});if(!r.ok)alert(await r.text());await refresh();return r.ok;}async function startPassive(){await post('/start-passive');}async function startEnergy(){await post('/start-energy-control-autonomous');}async function postStop(){displayFrozen=false;await post('/stop');}async function postClear(){if(confirm('Clear the current log?'))await post('/clear');}async function zeroCurrentRoll(){await post('/current-roll/zero');}async function setTarget(){await post('/current-roll/target?deg='+encodeURIComponent(target.value));}async function setShadowTarget(){await post('/q1-shadow/target?deg='+encodeURIComponent(shadowTarget.value));}async function setEnergyTarget(){await post('/energy-control-autonomous/target?deg='+encodeURIComponent(energyTarget.value));}function beginDownload(){downloading=true;apply(lastStatus);setTimeout(()=>{downloading=false;refresh();},3000);}function mark(id,yes){const e=document.getElementById(id);e.textContent=yes?'YES':'NO';e.className=yes?'yes':'no';}
-function apply(j){const running=!!j.running,busy=downloading||!!j.downloading,canStart=j.state==='READY_TO_MEASURE'||j.state==='FINISHED';lock(passive,busy||running||!canStart);lock(energy,busy||running||!canStart);lock(energyTarget,busy||running||!canStart);lock(stop,!running);lock(clear,busy||running);lock(rwlog,busy||running||j.rwlog_downloadable!=='yes');lock(zero,running||!j.static_confirmed);lock(target,running);lock(shadowTarget,running);document.getElementById('summary').textContent=`${j.state||'UNKNOWN'} | passive=${!!j.passive_capture_mode} | energy_v6=${!!j.energy_control_autonomous_mode} phase=${j.energy_control_autonomous_phase||'IDLE'} target=${Number(j.energy_control_autonomous_target_peak_deg||0).toFixed(1)} deg | motor=${j.motor_cmd_mA||0} mA | actual=${j.roller_actual_current_mA||0} mA | remaining=${j.remaining_s||0} s`;document.getElementById('abs').textContent=fmt(j.physical_roll_abs_deg);document.getElementById('current').textContent=fmt(j.current_roll_deg);document.getElementById('rate').textContent=fmt(j.physical_roll_rate_dps,3)+'/s';document.getElementById('targetError').textContent=`${fmt(j.target_roll_deg)} / ${fmt(j.target_error_deg)}`;mark('static',!!j.static_confirmed);mark('ready',!!j.ready);document.getElementById('criteria').textContent=`STATIC: |rate| <= ${Number(j.static_rate_threshold_dps||0).toFixed(2)} deg/s for ${j.static_hold_time_ms||0} ms. READY: display-only.`;if(document.activeElement!==target){const value=String(j.target_roll_deg);if([...target.options].some(o=>o.value===value))target.value=value;}if(document.activeElement!==shadowTarget&&Number.isFinite(Number(j.q1_shadow_target_peak_abs_deg)))shadowTarget.value=Number(j.q1_shadow_target_peak_abs_deg).toFixed(1);if(document.activeElement!==energyTarget&&Number.isFinite(Number(j.energy_control_autonomous_target_peak_deg)))energyTarget.value=String(Number(j.energy_control_autonomous_target_peak_deg));}
-function applyFrozenState(){[passive,energy,energyTarget,clear,rwlog,zero,target,shadowTarget].forEach(x=>lock(x,true));lock(stop,false);document.getElementById('summary').textContent='MEASUREMENT RUNNING | Web display update paused by design';}
-async function refresh(){if(displayFrozen||refreshInFlight)return;refreshInFlight=true;let timer;try{const controller=new AbortController();timer=setTimeout(()=>controller.abort(),1500);const r=await fetch('/status.json',{cache:'no-store',signal:controller.signal});clearTimeout(timer);lastStatus=await r.json();if(lastStatus.running){displayFrozen=true;applyFrozenState();setTimeout(()=>{displayFrozen=false;refresh();},41000);return;}if(displayFrozen)displayFrozen=false;apply(lastStatus);}catch(e){if(!displayFrozen)[energy,energyTarget,passive,stop,clear,rwlog,zero,target,shadowTarget].forEach(x=>lock(x,true));}finally{if(timer)clearTimeout(timer);refreshInFlight=false;}}setInterval(refresh,500);refresh();
+function apply(j){const b=j.startup||{};document.getElementById('startupInfo').textContent=`${b.guide_reason||'--'} | 初期化 ${b.init_attempts||0}回 | norm=${b.accel_norm_g??'--'} g | 立位ずれ=${b.direction_error_deg??'--'}° | gyro=${b.gyro_norm_dps??'--'}°/s | age=${b.sample_age_us??'--'} us | IMU=${b.imu_error||'OK'}`;document.getElementById('errorInfo').textContent=j.last_error||'';const running=!!j.running,busy=downloading||!!j.downloading,canStart=j.state==='READY_TO_MEASURE'||j.state==='FINISHED';lock(passive,busy||running||!canStart);lock(energy,busy||running||!canStart);lock(energyTarget,busy||running||!canStart);lock(stop,!running);lock(clear,busy||running);lock(rwlog,busy||running||j.rwlog_downloadable!=='yes');lock(zero,running||!j.static_confirmed);lock(target,running);lock(shadowTarget,running);document.getElementById('summary').textContent=`${j.state||'UNKNOWN'} | passive=${!!j.passive_capture_mode} | energy_v6=${!!j.energy_control_autonomous_mode} phase=${j.energy_control_autonomous_phase||'IDLE'} target=${Number(j.energy_control_autonomous_target_peak_deg||0).toFixed(1)} deg | motor=${j.motor_cmd_mA||0} mA | actual=${j.roller_actual_current_mA||0} mA | remaining=${j.remaining_s||0} s`;document.getElementById('abs').textContent=fmt(j.physical_roll_abs_deg);document.getElementById('current').textContent=fmt(j.current_roll_deg);document.getElementById('rate').textContent=fmt(j.physical_roll_rate_dps,3)+'/s';document.getElementById('targetError').textContent=`${fmt(j.target_roll_deg)} / ${fmt(j.target_error_deg)}`;mark('static',!!j.static_confirmed);mark('ready',!!j.ready);document.getElementById('criteria').textContent=`STATIC: |rate| <= ${Number(j.static_rate_threshold_dps||0).toFixed(2)} deg/s for ${j.static_hold_time_ms||0} ms. READY: display-only.`;if(document.activeElement!==target){const value=String(j.target_roll_deg);if([...target.options].some(o=>o.value===value))target.value=value;}if(document.activeElement!==shadowTarget&&Number.isFinite(Number(j.q1_shadow_target_peak_abs_deg)))shadowTarget.value=Number(j.q1_shadow_target_peak_abs_deg).toFixed(1);if(document.activeElement!==energyTarget&&Number.isFinite(Number(j.energy_control_autonomous_target_peak_deg)))energyTarget.value=String(Number(j.energy_control_autonomous_target_peak_deg));}
+function applyFrozenState(){[passive,energy,energyTarget,clear,rwlog,zero,target,shadowTarget].forEach(x=>lock(x,true));lock(stop,false);document.getElementById('summary').textContent='MEASUREMENT RUNNING | lightweight state heartbeat';}
+async function refresh(){if(refreshInFlight)return;refreshInFlight=true;let timer;try{const controller=new AbortController();timer=setTimeout(()=>controller.abort(),1500);const r=await fetch('/status.json',{cache:'no-store',signal:controller.signal});clearTimeout(timer);lastStatus=await r.json();if(lastStatus.running){displayFrozen=true;applyFrozenState();return;}if(displayFrozen)displayFrozen=false;apply(lastStatus);}catch(e){if(!displayFrozen)[energy,energyTarget,passive,stop,clear,rwlog,zero,target,shadowTarget].forEach(x=>lock(x,true));}finally{if(timer)clearTimeout(timer);refreshInFlight=false;}}setInterval(refresh,1000);refresh();
 </script></body></html>
 )HTML";
 
@@ -58,12 +60,25 @@ void WebUi::update() {
 }
 
 void WebUi::handleRoot() {
+  if (runner_->running()) { server_->send(409, "text/plain", "read_after_run"); return; }
   server_->sendHeader("Cache-Control", "no-store, no-cache, must-revalidate");
   server_->sendHeader("Pragma", "no-cache");
   server_->send_P(200, "text/html; charset=utf-8", INDEX_HTML);
 }
 
 void WebUi::handleStatus() {
+  if (runner_->running()) {
+    // Fixed-size heartbeat; never construct the many-kilobyte idle status
+    // in START_SYNC or while a pulse is live. HTTP ESTOP remains serviced.
+    char body[192];
+    const auto& st = runner_->status();
+    snprintf(body, sizeof(body),
+             "{\"running\":true,\"state\":\"%s\",\"motor_cmd_mA\":%d,\"remaining_ms\":%lu}",
+             runner_->stateName(), static_cast<int>(st.motor_cmd_mA),
+             static_cast<unsigned long>(st.remaining_ms));
+    server_->send(200, "application/json", body);
+    return;
+  }
   server_->send(200, "application/json", statusJson());
 }
 
@@ -88,6 +103,9 @@ void WebUi::handleStartEnergyControlV0() {
 
 void WebUi::handleStartEnergyControlAutonomous() {
   if (logger_->downloading()) { server_->send(409, "text/plain", "download_in_progress"); return; }
+  // Refresh from the idle mailbox before the unchanged physical start gate.
+  // The run boundary is established by main AFTER this HTTP response returns.
+  imu_->update();
   const bool ok = runner_->startEnergyControlAutonomousCapture();
   server_->send(ok ? 200 : 409, "text/plain", ok ? "energy_control_autonomous_started" : runner_->status().last_error);
 }
@@ -354,6 +372,7 @@ String WebUi::statusJson() const {
   appendJsonUint64(json, logger_->runStartUs());
   json += ",\"last_measurement_done\":\"" + String(logger_->lastMeasurementDone() ? "yes" : "no") + "\"";
   json += ",\"calibration_sample_count\":" + String(st.calibration_sample_count);
+  json += ",\"startup\":" + imu_->startupDiagnosticsJson();
   json += ",\"imu_ok\":" + String(imu_->ok() ? "true" : "false");
   json += ",\"roller_ok\":" + String(roller_->ok() ? "true" : "false");
   json += ",\"roller_actual_current_mA\":" + String(roller.actual_current_mA);
@@ -384,4 +403,3 @@ String WebUi::statusJson() const {
   json.replace(":nan", ":null");
   return json;
 }
-

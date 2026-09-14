@@ -33,8 +33,9 @@ def main() -> None:
         'runner_->requestEmergencyStop("web_estop")',
         "displayFrozen",
         "refreshInFlight",
-        "if(displayFrozen||refreshInFlight)return;",
-        "if(lastStatus.running){displayFrozen=true;applyFrozenState();setTimeout(()=>{displayFrozen=false;refresh();},41000);return;}",
+        "if(refreshInFlight)return;",
+        "if(lastStatus.running){displayFrozen=true;applyFrozenState();return;}",
+        "setInterval(refresh,1000);refresh();",
         "async function postStop(){displayFrozen=false;await post('/stop');}",
         "if(displayFrozen)displayFrozen=false;apply(lastStatus);",
         'json.replace(":nan", ":null")',
@@ -42,6 +43,13 @@ def main() -> None:
         'json.replace(":inf", ":null")',
     ):
         assert token in web, token
+
+    # V46o keeps the UI frozen but receives a small heartbeat to show ESTOP.
+    # Test the replacement behavior, not the obsolete 41-second polling pause.
+    status_region = web[web.index("void WebUi::handleStatus()"):web.index("void WebUi::handleStartPassive()")]
+    assert "char body[192]" in status_region
+    assert status_region.index("return;") < status_region.index("statusJson()")
+    assert "41000" not in web
 
     for token in (
         "energy_control_autonomous_pulse_live",

@@ -20,7 +20,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Verify V46n release and retained motor guards
+      - name: Verify V46o release and retained motor guards
         run: |
           python tools/test_v46n_acquisition_source.py
           python tools/test_current_audit_source_guards.py
@@ -32,11 +32,13 @@ jobs:
           python tools/test_rwlog_v46_converter.py
           g++ -std=c++11 -O2 tools/test_v46n_acquisition.cpp -o /tmp/test_acq
           /tmp/test_acq
+          g++ -std=c++17 -O2 -Wall -Wextra -Werror -Itools/host_v46o tools/test_v46o_startup.cpp -o /tmp/test_v46o
+          /tmp/test_v46o
           python -m json.tool site/manifest.json >/dev/null
-          grep -q 'v46n_priority_imu_20260914' site/index.html
+          grep -q 'v46o_startup_boundary_20260914' site/index.html
       - name: Install PlatformIO
         run: pip install platformio
-      - name: Build V46n motor-driven firmware
+      - name: Build V46o motor-driven firmware
         run: pio run -e atoms3cam
       - name: Assemble verified web flasher
         run: |
