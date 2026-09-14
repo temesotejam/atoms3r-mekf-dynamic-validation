@@ -45,19 +45,22 @@ jobs:
         run: |
           pip install platformio
           pio run -e atoms3cam
-      - name: Commit only tested review source
+      - name: Commit only tested application source
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src site tools docs .github/workflows/build.yml .github/workflows/pages.yml
+          # GITHUB_TOKEN has contents access, not workflows permission.
+          # Workflow files are reviewed and committed separately via the repository connection.
+          git add src site tools docs
           git diff --cached --check
           git commit -m 'Integrate verified V46q lightweight IMU acquisition and stage profiling'
           git push origin HEAD:feature/v46q-imu-lightweight
       - name: Preserve exact tested source
         run: |
-          mkdir -p reviewed
+          mkdir -p reviewed/workflows
           git archive --format=zip HEAD > reviewed/source.zip
           git rev-parse HEAD > reviewed/source-sha.txt
+          cp .github/workflows/{build.yml,pages.yml} reviewed/workflows/
           cp .pio/build/atoms3cam/firmware.bin reviewed/
       - uses: actions/upload-artifact@v4
         with:
