@@ -3,6 +3,8 @@
 #include <M5Unified.h>
 #include "config.h"
 
+static_assert(configTICK_RATE_HZ == 1000, "V46n requires one-millisecond RTOS ticks");
+
 bool ImuManager::begin() {
   // Roller uses Arduino Wire controller 0. Do not start with a shared controller.
   internal_i2c_port_ = static_cast<int>(M5.In_I2C.getPort());
@@ -99,6 +101,10 @@ void ImuManager::acquisitionLoop() {
     portENTER_CRITICAL(&mux_);
     audit_.poll(elapsed, wakes);
     portEXIT_CRITICAL(&mux_);
+    // If I/O overruns its poll period, notifications may remain continuously
+    // pending. Block for one tick so the control/stop owner still gets CPU.
+    // Do not replay notification counts as imaginary sensor samples.
+    if (elapsed >= Config::IMU_POLL_PERIOD_US) vTaskDelay(1);
   }
 }
 
@@ -125,7 +131,7 @@ void ImuManager::captureSensor() {
   capture_.gyro_fresh = gyro_new;
   if (accel_new) {
     capture_.ax_g = d.accel.x; capture_.ay_g = d.accel.y; capture_.az_g = d.accel.z;
-    capture_.acc_norm_g = sqrtf(capture_.ax_g* capture_.ax_g + capture_.ay_g*capture_.ay_g + capture_.az_g*capture_.az_g);
+    capture_.acc_norm_g = sqrtf(capture_.ax_g*capture_.ax_g + capture_.ay_g*capture_.ay_g + capture_.az_g*capture_.az_g);
     capture_.acc_norm_error_g = capture_.acc_norm_g - 1.0f;
     capture_.pitch_accel_only_deg = Config::PITCH_SIGN * atan2f(-capture_.ax_g,
         sqrtf(capture_.ay_g*capture_.ay_g + capture_.az_g*capture_.az_g)) * 57.2957795f;
@@ -207,7 +213,9 @@ void ImuManager::update() {
   if (fault) { reading_.imu_ok = false; last_error_ = reason; return; }
   ImuReading next;
   const uint32_t depth = uxQueueMessagesWaiting(sample_queue_);
-  if (xQueueReceive(sample_queue_, &next, 0) != pdTRUE) return;
+  // Empty queue: block for at most one tick, not a priority-2 busy loop.
+  // A published sample wakes us immediately; timed motor/HTTP service remains bounded.
+  if (xQueueReceive(sample_queue_, &next, 1) != pdTRUE) return;
   if (!sequential) {
     // Bounded drain, never an unbounded loop racing the producer.
     ImuReading newer;
@@ -228,7 +236,10 @@ void ImuManager::update() {
     last_error_ = "imu_delivery_backlog_over_10ms";
     return;
   }
+  const uint32_t previous_accel_sequence = reading_.accel_sequence;
   reading_ = next;
+  // Accel may arrive on a poll before the next gyro publishes the combined row.
+  reading_.accel_fresh = reading_.accel_sequence != previous_accel_sequence;
   reading_.time_since_last_pulse_ms = static_cast<uint16_t>(min<uint32_t>(65535, beta_context_time_since_last_pulse_ms_));
   last_error_ = "";
 }
@@ -243,11 +254,16 @@ bool ImuManager::ok() const {
   return imu_present_ && reading_.imu_ok && reading_.rate_config_ok && acquisitionHealthy();
 }
 bool ImuManager::stale(uint32_t now_ms) const {
+  (void)now_ms;
   portENTER_CRITICAL(&mux_);
   const uint32_t stamp = latest_capture_us_, stamp_ms = latest_capture_ms_;
   portEXIT_CRITICAL(&mux_);
+  // The reader can preempt between the caller's millis() and this snapshot.
+  // Read the comparison clock AFTER the snapshot, avoiding unsigned underflow
+  // from a perfectly fresh sample. The existing stale limit is unchanged.
+  const uint32_t check_now_ms = millis();
   return !acquisitionHealthy() || stamp == 0 ||
-      static_cast<uint32_t>(now_ms - stamp_ms) > Config::IMU_STALE_LIMIT_MS;
+      static_cast<uint32_t>(check_now_ms - stamp_ms) > Config::IMU_STALE_LIMIT_MS;
 }
 void ImuManager::zeroPitch() { }
 void ImuManager::setDynamicBetaContext(bool pulse_active, uint32_t since_ms, bool pre_start) {
@@ -284,6 +300,7 @@ String ImuManager::acquisitionDiagnosticsJson() const {
   json += ",\"internal_i2c_port\":" + String(internal_i2c_port_);
   json += ",\"internal_sda\":" + String(internal_sda_) + ",\"internal_scl\":" + String(internal_scl_);
   json += ",\"roller_i2c_port\":0,\"queue_capacity\":32,\"delivery_age_limit_us\":10000";
+  json += ",\"consumer_empty_wait_ticks\":1,\"reader_overrun_yield_ticks\":1";
   json += ",\"started\":" + String(started_ ? "true" : "false");
   json += ",\"fault\":" + String(fault ? "true" : "false") + ",\"fault_reason\":\"" + String(reason) + "\"";
   json += ",\"total_captured_since_boot\":" + String(total);
