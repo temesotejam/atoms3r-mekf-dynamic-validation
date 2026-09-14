@@ -1,4 +1,6 @@
 #include "psram_logger.h"
+#include "imu_manager.h"
+extern ImuManager imu;
 
 #include <string.h>
 
@@ -1329,6 +1331,7 @@ String PsramLogger::buildMetadataJson() const {
     json += "}";
   }
   json += "],";
+  json += "\"v46n_imu_acquisition\":" + imu.acquisitionDiagnosticsJson() + ",";
   json += "\"v46l_solver_shadow_revision\":\"v46l_discrete_ternary_shadow_20260914\",";
   json += "\"v46l_solver_shadow_policy\":\"legacy_exhaustive_solver_controls_motor;fast_solver_runs_only_after_normal_pulse_end;metadata_only\",";
   json += "\"v46l_solver_shadow_event_overflow\":" + String(solver_shadow_event_overflow_ ? "true" : "false") + ",";

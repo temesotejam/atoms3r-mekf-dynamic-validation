@@ -52,8 +52,8 @@ assert 'roller_io_task_init_failed' in web
 assert 'roller_io_init_attempt_count' in web
 assert 'roller_io_recovery_count' in web
 assert 'roller_command_latency_max_us' in web
-assert 'AtomS3R V46l MEKF Motor Validation' in manifest
-assert '"version": "0.46.11"' in manifest
+assert 'AtomS3R V46n MEKF Motor Validation' in manifest
+assert '"version": "0.46.13"' in manifest
 print('V46l dual-core Roller READY guards passed')
 
 # Initialization/recovery must be self-healing, not one-shot.

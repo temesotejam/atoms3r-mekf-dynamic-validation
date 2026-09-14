@@ -60,7 +60,10 @@ struct ImuAcquisitionAudit {
       if (dt_us > max_dt_per_second[second]) max_dt_per_second[second] = dt_us;
     }
     if (dt_us > 4000) {
-      if (gap_count < kGapCapacity) gaps[gap_count++] = {relative_us, dt_us, sequence};
+      if (gap_count < kGapCapacity) {
+        Gap& g = gaps[gap_count++];
+        g.time_us = relative_us; g.dt_us = dt_us; g.sequence = sequence;
+      }
       else ++gap_overflow;
     }
   }
