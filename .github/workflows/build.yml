@@ -15,8 +15,8 @@ jobs:
           python-version: "3.x"
       - name: Install PlatformIO
         run: pip install --upgrade platformio
-      - name: Verify V46k validation identity
-        run: grep -R -q "v46k_pulse_start_timing_probe_20260914" src
+      - name: Verify V46l validation identity
+        run: grep -R -q "v46l_fast_solver_shadow_20260914" src
       - name: Run V46 source guard
         run: python tools/test_current_audit_source_guards.py
       - name: Run V46 motor-path guard
@@ -25,8 +25,10 @@ jobs:
         run: python tools/test_v46g_highrate_source_guards.py
       - name: Run V46 task/recovery guard
         run: python tools/test_v46i_task_split_source_guards.py
-      - name: Run V46k timing-probe guard
+      - name: Run inherited V46k timing-probe guard
         run: python tools/test_v46k_timing_probe_source_guards.py
+      - name: Run V46l fast-solver shadow guard
+        run: python tools/test_v46l_fast_solver_shadow.py
       - name: Run RWLOG v46 regression
         run: python tools/test_rwlog_v46_converter.py
       - name: Check V46 analysis tool
@@ -52,7 +54,7 @@ jobs:
             0xe000 dist/boot_app0.bin \
             0x10000 dist/firmware.bin
           printf '%s\n' \
-            'AtomS3R V46k MEKF 400Hz gyro / 200Hz accel / pulse-start timing diagnostic' \
+            'AtomS3R V46l MEKF 400Hz gyro / 200Hz accel / legacy-control + fast-solver shadow validation' \
             '0x0000  bootloader.bin' \
             '0x8000  partitions.bin' \
             '0xe000  boot_app0.bin' \
@@ -60,10 +62,10 @@ jobs:
             'merged-firmware.bin: write at 0x0000' \
             > dist/FLASH_LAYOUT.txt
           (cd dist && sha256sum bootloader.bin partitions.bin boot_app0.bin firmware.bin merged-firmware.bin > SHA256SUMS.txt)
-      - name: Upload flashable V46k diagnostic firmware
+      - name: Upload flashable V46l diagnostic firmware
         uses: actions/upload-artifact@v4
         with:
-          name: atoms3r-v46k-timing-diagnostic-${{ github.sha }}
+          name: atoms3r-v46l-fast-solver-shadow-${{ github.sha }}
           path: dist/
           if-no-files-found: error
           retention-days: 30
