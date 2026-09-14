@@ -20,12 +20,15 @@ jobs:
           python-version: "3.11"
       - name: Verify retained baseline and IMU ownership
         run: python tools/test_v46n_acquisition_source.py
-      - name: Run native acquisition accounting tests
+      - name: Run native acquisition and run-ownership tests
         run: |
           g++ -std=c++11 -O2 tools/test_v46n_acquisition.cpp -o /tmp/test_acq
           /tmp/test_acq
           g++ -std=c++17 -O2 -Wall -Wextra -Werror -Itools/host_v46o tools/test_v46o_startup.cpp -o /tmp/test_v46o
           /tmp/test_v46o
+          python tools/test_v46p_run_control_source.py
+          g++ -std=c++17 -O2 -Wall -Wextra -Werror -Itools/host_v46o tools/test_v46p_run_control.cpp -o /tmp/test_v46p
+          /tmp/test_v46p
       - name: Run all inherited control and format guards
         run: |
           python tools/test_current_audit_source_guards.py
@@ -39,7 +42,7 @@ jobs:
           /tmp/test_mekf
       - name: Install PlatformIO
         run: pip install platformio
-      - name: Build motor-driven V46o firmware
+      - name: Build motor-driven V46p firmware
         run: pio run -e atoms3cam
       - name: Package flash images
         run: |
@@ -49,12 +52,12 @@ jobs:
           cp "$HOME/.platformio/packages/framework-arduinoespressif32/tools/partitions/boot_app0.bin" dist/
           python "$HOME/.platformio/packages/tool-esptoolpy/esptool.py" --chip esp32s3 merge_bin -o dist/merged-firmware.bin 0x0000 dist/bootloader.bin 0x8000 dist/partitions.bin 0xe000 dist/boot_app0.bin 0x10000 dist/firmware.bin
           printf '%s\n' "$GITHUB_SHA" > dist/build-sha.txt
-          printf '%s\n' 'V46o 0.46.14; merged-firmware.bin at 0x0000; real V7 motor controller retained' > dist/FLASH_LAYOUT.txt
+          printf '%s\n' 'V46p 0.46.15; merged-firmware.bin at 0x0000; real V7 motor controller retained' > dist/FLASH_LAYOUT.txt
           (cd dist && sha256sum *.bin > SHA256SUMS.txt)
           git diff --exit-code
       - uses: actions/upload-artifact@v4
         with:
-          name: atoms3r-v46o-${{ github.sha }}
+          name: atoms3r-v46p-${{ github.sha }}
           path: dist/
           if-no-files-found: error
           retention-days: 30
