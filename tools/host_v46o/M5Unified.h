@@ -16,11 +16,12 @@ struct HostImu {
   HostDevice dev;
   unsigned begin_calls=0,fail_begins=0,no_stream_attempts=0;
   uint32_t last_a=0,last_g=0;
+  uint32_t update_cost_us=0,convert_cost_us=0;
   bool begin(HostBus* b,int board){if(!b||board!=7)abort();++begin_calls;last_a=last_g=0;return begin_calls>fail_begins;}
   int getType(){return m5::imu_bmi270;}
   HostDevice* getImuInstancePtr(unsigned){return &dev;}
-  uint8_t update(){if(begin_calls<=no_stream_attempts)return 0;uint8_t b=0;if(host_us/5000!=last_a){last_a=host_us/5000;b|=1;}if(host_us/2500!=last_g){last_g=host_us/2500;b|=2;}data.usec=host_us;return b;}
-  Data getImuData(){return data;}
+  uint8_t update(){host_us+=update_cost_us;if(begin_calls<=no_stream_attempts)return 0;uint8_t b=0;if(host_us/5000!=last_a){last_a=host_us/5000;b|=1;}if(host_us/2500!=last_g){last_g=host_us/2500;b|=2;}data.usec=host_us;return b;}
+  Data getImuData(){host_us+=convert_cost_us;return data;}
 };
 struct HostM5{HostBus In_I2C;HostImu Imu;int getBoard(){return 7;}};
 inline HostM5 M5;

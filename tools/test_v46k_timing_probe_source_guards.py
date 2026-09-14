@@ -11,7 +11,7 @@ manifest = Path("site/manifest.json").read_text(encoding="utf-8")
 
 assert "v46l_fast_solver_shadow_20260914" in config
 assert "V46l" in main
-assert '"version": "0.46.15"' in manifest
+assert '"version": "0.46.16"' in manifest
 
 # Physical/control behavior is deliberately frozen from V46j.
 assert "CURRENT_AUDIT_FAST_READ_PERIOD_US = 2000UL" in config

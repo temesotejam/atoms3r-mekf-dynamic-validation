@@ -7,6 +7,7 @@
 #include <esp_timer.h>
 #include "imu_acquisition_audit.h"
 #include "imu_startup_boundary.h"
+#include "imu_poll_profile.h"
 
 struct ImuReading {
   bool imu_ok = false;
@@ -83,6 +84,8 @@ class ImuManager {
   bool startAcquisition();
   void acquisitionLoop();
   void captureSensor();
+  void recordPollProfile(const ImuPollObservation& observation);
+  String pollProfileJson() const;
   void publishSample();
   void latchFault(const char* reason, uint32_t sample_us = 0,
                   uint32_t age_us = 0, uint32_t depth = 0);
@@ -132,6 +135,17 @@ class ImuManager {
   int reader_core_ = -1, consumer_core_ = -1;
   uint32_t reader_priority_ = 0, consumer_priority_ = 0;
   int internal_i2c_port_ = -1, internal_sda_ = -1, internal_scl_ = -1;
+  struct NotifyStamp {
+    bool seen = false;
+    uint32_t time_us = 0, gap_us = 0, sequence = 0;
+  };
+  mutable portMUX_TYPE notify_mux_ = portMUX_INITIALIZER_UNLOCKED;
+  NotifyStamp notify_stamp_;  // Timer writes; reader takes a small coherent copy.
+  ImuPollObservation poll_observation_;  // Reader only, also used before task startup.
+  ImuPollProfile poll_profile_;  // Reader writes ONLY during measurement.
+  uint32_t previous_poll_start_us_ = 0, previous_poll_total_us_ = 0;
+  uint32_t previous_yield_us_ = 0;
+  bool have_previous_poll_ = false;
   ImuAcquisitionAudit audit_;
   mutable ImuAcquisitionAudit audit_snapshot_;  // Avoid a large HTTP-task stack object.
 };
