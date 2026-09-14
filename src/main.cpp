@@ -42,27 +42,22 @@ static void updateStartupPoseGuide() {
       UprightPoseGuide::GUIDE_LED_ON_AFTER_BOOT_MS) {
     return;
   }
-
   if (!startup_guide_prompt_announced) {
     startup_guide_prompt_announced = true;
     Serial.println("Startup guide: 10 s elapsed; LED ON until upright pose is stable");
     displayLine("Stand upright", "LED ON until stable");
   }
-
   digitalWrite(Config::SYNC_LED_PIN, HIGH);
-
   const ImuReading& r = imu.reading();
   if (!UprightPoseGuide::isUprightStableSample(r)) {
     startup_upright_since_ms = 0;
     return;
   }
-
   if (startup_upright_since_ms == 0) startup_upright_since_ms = now_ms;
   if (static_cast<uint32_t>(now_ms - startup_upright_since_ms) <
       UprightPoseGuide::UPRIGHT_STABLE_HOLD_MS) {
     return;
   }
-
   startup_upright_confirmed = true;
   digitalWrite(Config::SYNC_LED_PIN, LOW);
   Serial.printf("Startup guide: upright confirmed; gravity error=%.2f deg, norm=%.3f g\n",
@@ -75,7 +70,9 @@ void setup() {
   Serial.begin(Config::SERIAL_BAUD);
   delay(300);
   Serial.println();
+  // V46l is the frozen controller/attitude baseline, not the acquisition revision.
   Serial.println("AtomS3R V46l MEKF dual-core motor validation");
+  Serial.println("V46n acquisition 0.46.13: priority BMI270 task / timestamped queue");
 
   auto cfg = M5.config();
   cfg.serial_baudrate = 0;
@@ -86,7 +83,7 @@ void setup() {
                 Config::RESOLVED_M5UNIFIED_VERSION, Config::RESOLVED_M5GFX_VERSION,
                 Config::RESOLVED_ADAFRUIT_AHRS_VERSION, Config::V62_BASE_COMMIT,
                 Config::ATTITUDE_VALIDATION_REVISION);
-  displayLine("V46l MEKF", "DUAL-CORE V7");
+  displayLine("V46n IMU", "DUAL-CORE V7");
 
   const bool psram_ok = logger.begin();
   Serial.printf("PSRAM: %s total=%u free=%u sample_capacity=%u\n", psram_ok ? "OK" : "FAILED",
@@ -95,7 +92,9 @@ void setup() {
   if (!psram_ok) Serial.printf("PSRAM error: %s\n", logger.lastError());
 
   const bool imu_ok = imu.begin();
-  Serial.printf("IMU: %s\n", imu_ok ? "OK" : "FAILED");
+  Serial.printf("IMU acquisition: %s internal_i2c=%d SDA=%d SCL=%d error=%s\n",
+                imu_ok ? "OK" : "FAILED", static_cast<int>(M5.In_I2C.getPort()),
+                M5.In_I2C.getSDA(), M5.In_I2C.getSCL(), imu.lastError());
 
   const bool roller_ok = roller.begin();
   const bool roller_task_ok = roller_ok && roller.startIoTask(
@@ -107,23 +106,36 @@ void setup() {
 
   runner.begin(logger, imu, roller);
   web.begin(server, runner, imu, roller, logger);
-
   Serial.printf("AP SSID: %s\n", Config::AP_SSID);
   Serial.println("Open http://192.168.4.1/ and start Autonomous Energy Control V7");
-  displayLine("V7 motor ready", Config::AP_SSID);
+  displayLine("V46n / V7 ready", Config::AP_SSID);
+}
+
+static void updateAcquisitionContext() {
+  imu.setAcquisitionContext(runner.running(),
+      runner.status().state == ExperimentState::RUNNING_BATCH_SWEEP);
+}
+static void checkAcquisitionHealth() {
+  // Added fail-closed condition; the established start and motor gates remain.
+  if (runner.running() && (!imu.acquisitionHealthy() || imu.stale(millis()))) {
+    runner.requestEmergencyStop("imu_acquisition_overflow_backlog_or_stale");
+  }
 }
 
 void loop() {
   const uint32_t loop_start_us = micros();
+  updateAcquisitionContext();
 
-  // Core 1 timing path: BMI270 -> MEKF -> predicted control -> V7 state machine.
-  // Roller485 I2C/current audit is owned by the dedicated Core 0 task.
+  // Core 1 priority-6 producer owns sensor I/O and can preempt this consumer.
+  // Core 1 Arduino consumer owns MEKF, unchanged V7 solver, logging and Web.
+  // Core 0 continues to own all Roller motor commands and current audit.
   runner.serviceFast();
   runner.updateImuDynamicBetaContext();
   const bool v46k_timing_probe_active = runner.energyControlAutonomousMode() && runner.running();
   if (v46k_timing_probe_active) {
     const uint32_t imu_t0_us = micros();
     imu.update();
+    checkAcquisitionHealth();
     const uint32_t imu_update_us = static_cast<uint32_t>(micros() - imu_t0_us);
     const uint32_t runner_t0_us = micros();
     runner.update();
@@ -132,19 +144,18 @@ void loop() {
                                  static_cast<uint32_t>(micros() - loop_start_us));
   } else {
     imu.update();
+    checkAcquisitionHealth();
     runner.update();
   }
+  updateAcquisitionContext();
 
-  // Display/button servicing is unnecessary during the measurement itself.
   if (!runner.running()) {
     M5.update();
     updateStartupPoseGuide();
   }
-  // V46h/V46i browser code does not poll status while a measurement is active;
-  // keeping handleClient here preserves emergency-stop POST handling without
-  // introducing a second thread that mutates ExperimentRunner.
+  // Keep emergency-stop HTTP handling in the same single control-owner thread.
   web.update();
-
+  updateAcquisitionContext();
   runner.setLoopDt(static_cast<uint32_t>(micros() - loop_start_us));
   taskYIELD();
 }
