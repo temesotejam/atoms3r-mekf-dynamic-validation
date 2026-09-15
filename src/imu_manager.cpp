@@ -4,6 +4,18 @@
 #include "config.h"
 #include "upright_pose_guide.h"
 
+
+namespace {
+// Identical V46p expressions, relocated, not approximated. Run only at startup
+// or when the consumer sees a new accel sequence (normally 200Hz, not 400Hz).
+void updateDerivedAccel(ImuReading& r) {
+  r.acc_norm_g = sqrtf(r.ax_g*r.ax_g + r.ay_g*r.ay_g + r.az_g*r.az_g);
+  r.acc_norm_error_g = r.acc_norm_g - 1.0f;
+  r.pitch_accel_only_deg = Config::PITCH_SIGN * atan2f(-r.ax_g,
+      sqrtf(r.ay_g*r.ay_g + r.az_g*r.az_g)) * 57.2957795f;
+}
+}
+
 static_assert(configTICK_RATE_HZ == 1000, "V46p requires one-millisecond RTOS ticks");
 
 bool ImuManager::begin() {
@@ -80,6 +92,7 @@ bool ImuManager::initializeSensorAttempt() {
   while (static_cast<uint32_t>(millis() - warmup_start_ms) < 400) {
     const uint32_t a_seq = capture_.accel_sequence, g_seq = capture_.gyro_sequence;
     captureSensor();  // No task/queue yet: same sensor-owner code, synchronous startup only.
+    if (capture_.accel_sequence != a_seq) updateDerivedAccel(capture_);
     if (capture_.accel_sequence != a_seq && isfinite(capture_.acc_norm_g) &&
         capture_.acc_norm_g >= UprightPoseGuide::UPRIGHT_MIN_ACCEL_NORM_G &&
         capture_.acc_norm_g <= UprightPoseGuide::UPRIGHT_MAX_ACCEL_NORM_G) ++init_valid_accel_;
@@ -131,6 +144,14 @@ bool ImuManager::startAcquisition() {
 void ImuManager::timerCallback(void* arg) {
   // ESP_TIMER_TASK context: wake only; never do sensor I/O or float work here.
   auto* self = static_cast<ImuManager*>(arg);
+  const uint32_t stamp = micros();
+  portENTER_CRITICAL(&self->notify_mux_);
+  if (self->notify_stamp_.seen) self->notify_stamp_.gap_us = stamp - self->notify_stamp_.time_us;
+  self->notify_stamp_.seen = true;
+  self->notify_stamp_.time_us = stamp;
+  ++self->notify_stamp_.sequence;
+  portEXIT_CRITICAL(&self->notify_mux_);
+  // Do not notify while holding a spinlock. No I2C, math or JSON in callback.
   xTaskNotifyGive(self->acquisition_task_);
 }
 void ImuManager::taskEntry(void* arg) {
@@ -145,17 +166,62 @@ void ImuManager::acquisitionLoop() {
   portEXIT_CRITICAL(&mux_);
   for (;;) {
     const uint32_t wakes = ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+    NotifyStamp notification;
+    portENTER_CRITICAL(&notify_mux_);
+    notification = notify_stamp_;
+    portEXIT_CRITICAL(&notify_mux_);
+    // Clock AFTER the snapshot: a callback on the other core cannot cause
+    // unsigned underflow. Coalescing means this is latest-notification age.
     const uint32_t t0 = micros();
+    poll_observation_ = ImuPollObservation{};
+    poll_observation_.start_us = t0;
+    poll_observation_.wakes = wakes;
+    poll_observation_.has_notify = notification.seen;
+    poll_observation_.notify_age_us = notification.seen ? t0 - notification.time_us : 0;
+    poll_observation_.callback_gap_us = notification.gap_us;
+    poll_observation_.callback_sequence = notification.sequence;
+    poll_observation_.period_us = have_previous_poll_ ? t0 - previous_poll_start_us_ : 0;
+    poll_observation_.previous_total_us = previous_poll_total_us_;
+    poll_observation_.previous_yield_us = previous_yield_us_;
+    previous_poll_start_us_ = t0;
+    have_previous_poll_ = true;
     captureSensor();
     const uint32_t elapsed = static_cast<uint32_t>(micros() - t0);
+    poll_observation_.total_us = elapsed;
+    poll_observation_.forced_yield = elapsed >= Config::IMU_POLL_PERIOD_US;
+    previous_poll_total_us_ = elapsed;
     portENTER_CRITICAL(&mux_);
     audit_.poll(elapsed, wakes);
     portEXIT_CRITICAL(&mux_);
-    // If I/O overruns its poll period, notifications may remain continuously
-    // pending. Block for one tick so the control/stop owner still gets CPU.
-    // Do not replay notification counts as imaginary sensor samples.
+    recordPollProfile(poll_observation_);
+    previous_yield_us_ = 0;
+    // Keep the established overrun wait. Removing it could starve control/STOP.
+    const uint32_t yield_start = micros();
     if (elapsed >= Config::IMU_POLL_PERIOD_US) vTaskDelay(1);
+    if (elapsed >= Config::IMU_POLL_PERIOD_US) {
+      previous_yield_us_ = static_cast<uint32_t>(micros() - yield_start);
+      portENTER_CRITICAL(&mux_);
+      const bool same_measurement = audit_.active && audit_.epoch_us == poll_profile_.epoch_us;
+      portEXIT_CRITICAL(&mux_);
+      if (same_measurement) poll_profile_.stage[ImuPollProfile::YIELD].add(previous_yield_us_);
+    }
   }
+}
+
+void ImuManager::recordPollProfile(const ImuPollObservation& observation) {
+  // Same-core writer priority6 exceeds both possible context owners (4/2).
+  // The profile is never modified when measurement is inactive, so stopped
+  // HTTP export needs neither a 20KB stack copy nor a long critical section.
+  portENTER_CRITICAL(&mux_);
+  const bool active = audit_.active;
+  const uint32_t epoch = audit_.epoch_us;
+  portEXIT_CRITICAL(&mux_);
+  if (!active) return;
+  const uint32_t t0 = micros();
+  if (!poll_profile_.initialized || poll_profile_.epoch_us != epoch) poll_profile_.start(epoch);
+  poll_profile_.record(observation);
+  ImuPollProfile::maximum(poll_profile_.record_overhead_max_us,
+                         static_cast<uint32_t>(micros() - t0));
 }
 
 void ImuManager::captureSensor() {
@@ -164,9 +230,15 @@ void ImuManager::captureSensor() {
   capture_.sensor_mask = 0;
   const uint32_t now_us = micros();
   const auto mask = M5.Imu.update();
+  const uint32_t update_done_us = micros();
+  poll_observation_.update_us = static_cast<uint32_t>(update_done_us - now_us);
   const uint8_t bits = static_cast<uint8_t>(mask);
+  poll_observation_.mask = bits;
   if (bits == 0) return;  // No fresh value is not itself a read error.
+  const uint32_t convert_start_us = micros();
   const auto d = M5.Imu.getImuData();
+  const uint32_t convert_done_us = micros();
+  poll_observation_.convert_us = static_cast<uint32_t>(convert_done_us - convert_start_us);
   // M5Unified's host acquisition timestamp, NOT the BMI270 hardware sensor clock.
   const uint32_t sample_us = d.usec ? d.usec : now_us;
   const bool accel_new = bits & static_cast<uint8_t>(m5::IMU_Class::sensor_mask_accel);
@@ -182,10 +254,7 @@ void ImuManager::captureSensor() {
   capture_.gyro_fresh = gyro_new;
   if (accel_new) {
     capture_.ax_g = d.accel.x; capture_.ay_g = d.accel.y; capture_.az_g = d.accel.z;
-    capture_.acc_norm_g = sqrtf(capture_.ax_g*capture_.ax_g + capture_.ay_g*capture_.ay_g + capture_.az_g*capture_.az_g);
-    capture_.acc_norm_error_g = capture_.acc_norm_g - 1.0f;
-    capture_.pitch_accel_only_deg = Config::PITCH_SIGN * atan2f(-capture_.ax_g,
-        sqrtf(capture_.ay_g*capture_.ay_g + capture_.az_g*capture_.az_g)) * 57.2957795f;
+    // Derived accel norm/angle are evaluated by the consumer, not the reader.
     capture_.accel_update_dt_us = prev_accel_update_us_ ? sample_us - prev_accel_update_us_ : 1000000UL / Config::BMI270_ACCEL_ODR_HZ;
     prev_accel_update_us_ = sample_us;
     capture_.last_accel_update_us = sample_us;
@@ -202,7 +271,16 @@ void ImuManager::captureSensor() {
     capture_.last_update_us = sample_us;
     capture_.last_update_ms = millis();
     capture_.imu_ok = true;
+    poll_observation_.fresh_gyro = true;
+    poll_observation_.sample_us = sample_us;
+    poll_observation_.sequence = capture_.gyro_sequence;
+    poll_observation_.dt_us = capture_.gyro_update_dt_us;
+    const uint32_t publish_start_us = micros();
+    poll_observation_.pack_us = static_cast<uint32_t>(publish_start_us - convert_done_us);
     publishSample();
+    poll_observation_.publish_us = static_cast<uint32_t>(micros() - publish_start_us);
+  } else {
+    poll_observation_.pack_us = static_cast<uint32_t>(micros() - convert_done_us);
   }
 }
 
@@ -337,6 +415,15 @@ void ImuManager::update() {
     return;
   }
   const uint32_t previous_accel_sequence = reading_.accel_sequence;
+  // Preserve the same calibrated raw values and formulas. Only relocate work;
+  // cache across gyro-only deliveries so this runs once per new accel sample.
+  if (next.accel_sequence != previous_accel_sequence) {
+    updateDerivedAccel(next);
+  } else {
+    next.acc_norm_g = reading_.acc_norm_g;
+    next.acc_norm_error_g = reading_.acc_norm_error_g;
+    next.pitch_accel_only_deg = reading_.pitch_accel_only_deg;
+  }
   reading_ = next;
   // Accel may arrive on a poll before the next gyro publishes the combined row.
   reading_.accel_fresh = reading_.accel_sequence != previous_accel_sequence;
@@ -394,7 +481,7 @@ String ImuManager::acquisitionDiagnosticsJson() const {
   const auto& a = audit_snapshot_;
   String json;
   json.reserve(10000);
-  json = "{\"revision\":\"v46p_run_control_worker_20260914\",\"firmware_version\":\"0.46.15\"";
+  json = "{\"revision\":\"v46q_lightweight_acquisition_20260914\",\"firmware_version\":\"0.46.16\"";
   json += ",\"timestamp_semantics\":\"M5Unified_host_acquisition_not_sensor_clock\"";
   json += ",\"motor_controller\":\"unchanged_V46l_legacy_V7\"";
   json += ",\"reader_core\":" + String(reader_core) + ",\"reader_priority\":" + String(reader_priority);
@@ -448,7 +535,7 @@ String ImuManager::acquisitionDiagnosticsJson() const {
     json += "{\"time_us\":" + String(a.gaps[i].time_us);
     json += ",\"dt_us\":" + String(a.gaps[i].dt_us) + ",\"sequence\":" + String(a.gaps[i].sequence) + "}";
   }
-  json += "]}";
+  json += "],\"v46q_poll_profile\":" + pollProfileJson() + "}";
   return json;
 }
 
@@ -481,4 +568,68 @@ String ImuManager::startupDiagnosticsJson() const {
   s += ",\"gyro_norm_dps\":" + String(UprightPoseGuide::gyroNormDps(r), 3) + "}";
   s.replace(":nan", ":null"); s.replace(":inf", ":null"); s.replace(":-inf", ":null");
   return s;
+}
+
+String ImuManager::pollProfileJson() const {
+  portENTER_CRITICAL(&mux_);
+  const bool active = audit_.active;
+  portEXIT_CRITICAL(&mux_);
+  // This large profile has one high-priority same-core writer. During a live
+  // measurement refuse export; do not block the writer with a serialization lock.
+  if (active) return String("{\"available\":false,\"reason\":\"measurement_active\"}");
+  const auto& p = poll_profile_;
+  if (!p.initialized) return String("{\"available\":false,\"reason\":\"no_measurement_polls\"}");
+  String s;
+  s.reserve(48000);
+  s = "{\"available\":true,\"revision\":\"v46q_lightweight_acquisition_20260914\"";
+  s += ",\"semantics\":\"host_wall_times;update_includes_driver;notify_age_from_latest_callback;not_ISR_latency\"";
+  s += ",\"derived_accel_location\":\"consumer_new_accel_only_and_synchronous_startup\"";
+  s += ",\"epoch_us\":" + String(p.epoch_us);
+  s += ",\"polls\":" + String(p.polls) + ",\"fresh_gyro_polls\":" + String(p.gyro);
+  s += ",\"no_data_polls\":" + String(p.no_data);
+  s += ",\"coalesced_wakes\":" + String(p.coalesced_wakes);
+  s += ",\"forced_yields\":" + String(p.forced_yields);
+  s += ",\"long_gaps_over_4ms\":" + String(p.long_gaps);
+  s += ",\"outside_detail_window\":" + String(p.outside_buckets);
+  s += ",\"record_overhead_max_us\":" + String(p.record_overhead_max_us);
+  static const char* names[ImuPollProfile::STAGES] = {
+    "latest_notify_age", "observed_callback_gap", "poll_start_interval", "update_api",
+    "convert_api", "validate_pack", "publish_queue", "poll_total", "overrun_yield"};
+  s += ",\"stages\":{";
+  for (unsigned i = 0; i < ImuPollProfile::STAGES; ++i) {
+    const auto& v = p.stage[i];
+    if (i) s += ",";
+    s += "\"" + String(names[i]) + "\":{\"count\":" + String(v.count);
+    s += ",\"mean_us\":" + String(v.count ? static_cast<double>(v.sum_us) / v.count : 0.0, 3);
+    s += ",\"max_us\":" + String(v.max_us) + "}";
+  }
+  s += "},\"second_columns\":[\"second\",\"polls\",\"gyro\",\"no_data\",\"forced_yields\",\"notify_max_us\",\"update_max_us\",\"convert_max_us\",\"total_max_us\",\"period_max_us\",\"long_gaps\"]";
+  s += ",\"seconds\":[";
+  bool comma = false;
+  for (unsigned i = 0; i < ImuPollProfile::kSeconds; ++i) {
+    const auto& v = p.seconds[i];
+    if (!v.polls) continue;
+    if (comma) s += ",";
+    comma = true;
+    s += "[" + String(i) + "," + String(v.polls) + "," + String(v.gyro);
+    s += "," + String(v.no_data) + "," + String(v.forced_yields);
+    s += "," + String(v.notify_max) + "," + String(v.update_max) + "," + String(v.convert_max);
+    s += "," + String(v.total_max) + "," + String(v.period_max) + "," + String(v.long_gaps) + "]";
+  }
+  s += "],\"detail_policy\":\"worst_gap_per_100ms_bucket_not_all_gaps;full_counts_above\"";
+  s += ",\"bucket_us\":100000,\"detail_window_us\":32000000";
+  s += ",\"gap_columns\":[\"time_us\",\"dt_us\",\"sequence\",\"latest_notify_age_us\",\"callback_gap_us\",\"poll_period_us\",\"update_us\",\"convert_us\",\"pack_us\",\"publish_us\",\"total_us\",\"previous_total_us\",\"previous_yield_us\",\"wakes\"]";
+  s += ",\"worst_gap_by_100ms\":[";
+  comma = false;
+  for (const auto& g : p.worst_gap) {
+    if (!g.dt_us) continue;
+    if (comma) s += ",";
+    comma = true;
+    s += "[" + String(g.time_us) + "," + String(g.dt_us) + "," + String(g.sequence);
+    s += "," + String(g.notify_age_us) + "," + String(g.callback_gap_us) + "," + String(g.period_us);
+    s += "," + String(g.update_us) + "," + String(g.convert_us) + "," + String(g.pack_us);
+    s += "," + String(g.publish_us) + "," + String(g.total_us);
+    s += "," + String(g.previous_total_us) + "," + String(g.previous_yield_us) + "," + String(g.wakes) + "]";
+  }
+  return s + "]}";
 }

@@ -95,7 +95,7 @@ void setup() {
   Serial.println();
   // V46l is the frozen controller/attitude baseline, not the acquisition revision.
   Serial.println("AtomS3R V46l MEKF dual-core motor validation");
-  Serial.println("V46p acquisition 0.46.15: priority BMI270 task / timestamped queue");
+  Serial.println("V46q acquisition 0.46.16: priority BMI270 task / timestamped queue");
   Serial.printf("IMU consumer: core=%d priority=%u; BMI270 reader core=1 priority=6\n",
                 xPortGetCoreID(), static_cast<unsigned>(uxTaskPriorityGet(nullptr)));
 
@@ -108,7 +108,7 @@ void setup() {
                 Config::RESOLVED_M5UNIFIED_VERSION, Config::RESOLVED_M5GFX_VERSION,
                 Config::RESOLVED_ADAFRUIT_AHRS_VERSION, Config::V62_BASE_COMMIT,
                 Config::ATTITUDE_VALIDATION_REVISION);
-  displayLine("V46p IMU", "DUAL-CORE V7");
+  displayLine("V46q IMU", "DUAL-CORE V7");
 
   const bool psram_ok = logger.begin();
   Serial.printf("PSRAM: %s total=%u free=%u sample_capacity=%u\n", psram_ok ? "OK" : "FAILED",
@@ -136,7 +136,7 @@ void setup() {
   web.begin(server, runner, imu, roller, logger);
   Serial.printf("AP SSID: %s\n", Config::AP_SSID);
   Serial.println("Open http://192.168.4.1/ and start Autonomous Energy Control V7");
-  displayLine("V46p / V7 ready", Config::AP_SSID);
+  displayLine("V46q / V7 ready", Config::AP_SSID);
 }
 
 static void updateAcquisitionContext() {

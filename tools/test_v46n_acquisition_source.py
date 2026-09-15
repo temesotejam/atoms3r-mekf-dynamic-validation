@@ -50,9 +50,9 @@ assert 'capture_.' not in consumer
 assert 'v46n_imu_acquisition' in text('src/psram_logger.cpp')
 assert 'acquisitionDiagnosticsJson()' in text('src/web_ui.cpp')
 manifest = json.loads(text('site/manifest.json'))
-assert manifest['version'] == '0.46.15'
-assert 'V46p' in manifest['name']
-assert 'v46p_run_control_worker_20260914' in text('site/index.html')
+assert manifest['version'] == '0.46.16'
+assert 'V46q' in manifest['name']
+assert 'v46q_lightweight_acquisition_20260914' in text('site/index.html')
 
 # Scheduling is explicit. Both threads block instead of continuously spinning.
 assert 'kConsumerPriority = 2;' in main
