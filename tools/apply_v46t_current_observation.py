@@ -30,10 +30,11 @@ def main():
         p.write_text(t.replace(needle,".replace('v46t_current_observation_20260915', 'v46s_solver_audit_20260915')"+needle,1))
     for path in ('tools/test_v46r_fast_solver_control.py','tools/test_v46g_highrate_source_guards.py','tools/test_v46i_task_split_source_guards.py'):
         p=ROOT/path;t=p.read_text().replace(OLD_REV,NEW_REV)
-        if path.endswith('test_v46r_fast_solver_control.py'):t=t.replace('0.46.18','0.46.19').replace('V46s','V46t')
+        t=t.replace('0.46.18','0.46.19').replace('AtomS3R V46s Fast Solver Motor Validation','AtomS3R V46t Fast Solver Motor Validation')
+        if path.endswith('test_v46r_fast_solver_control.py'):t=t.replace('V46s','V46t')
         p.write_text(t)
     p=ROOT/'site/manifest.json';p.write_text(p.read_text().replace('0.46.18','0.46.19').replace('V46s','V46t'))
-    p=ROOT/'site/index.html';t=p.read_text().replace('V46s / 0.46.18','V46t / 0.46.19').replace('へV46sを書き込む','へV46tを書き込む').replace('V46s Fast Solver','V46t Fast Solver').replace('/ V46s /','/ V46t /').replace(' V46s ファームウェア',' V46t ファームウェア')
+    p=ROOT/'site/index.html';t=p.read_text().replace('V46s / 0.46.18','V46t / 0.46.19').replace('へV46sを書き込む','へV46tを書き込む').replace('V46s Fast Solver','V46t Fast Solver').replace('/ V46s /','/ V46t /').replace(' V46s ファームウェア',' V46t ファームウェア').replace('AtomS3R V46s','AtomS3R V46t')
     t=t.replace('      <h2>V46t / 0.46.19：高速ソルバの計測とオフライン検証</h2>','''      <h2>V46t / 0.46.19：電流記録の時刻整合を修正</h2>
       <p>電流値・連番・取得時刻を1回のスナップショットから読み、その後に行の参照時刻を採ります。
       別スナップショットの再読出しによる年齢の不整合を除去しました。未取得は従来どおりUINT32_MAXです。
