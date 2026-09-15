@@ -4,6 +4,7 @@ on:
     branches: [feature/v46r-fast-solver-control]
     paths:
       - 'tools/apply_v46r_fast_solver_control.py'
+      - 'tools/refine_v46r_selected_zero_baseline.py'
       - 'tools/test_v46r_fast_solver_control.py'
       - 'tools/test_v46g_highrate_source_guards.py'
       - 'tools/test_v46i_task_split_source_guards.py'
@@ -22,7 +23,9 @@ jobs:
         with:
           python-version: '3.11'
       - name: Apply reviewed V46r fast-solver control change
-        run: python tools/apply_v46r_fast_solver_control.py
+        run: |
+          python tools/apply_v46r_fast_solver_control.py
+          python tools/refine_v46r_selected_zero_baseline.py
       - name: Verify V46r control and retained safety envelope
         run: |
           set -euxo pipefail
