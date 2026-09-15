@@ -1,0 +1,61 @@
+name: v46s-audit-integration
+on:
+  push:
+    branches: [feature/v46s-solver-audit]
+    paths:
+      - '.github/workflows/v46s-audit-integration.yml'
+      - 'tools/apply_v46s_solver_audit.py'
+permissions:
+  contents: write
+jobs:
+  review:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Export exact source snapshot for review
+        run: |
+          mkdir -p /tmp/source-snapshot
+          git archive HEAD | tar -x -C /tmp/source-snapshot
+          git rev-parse HEAD > /tmp/source-snapshot/review-source-sha.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v46s-source-snapshot
+          path: /tmp/source-snapshot/
+          include-hidden-files: true
+          retention-days: 7
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Apply and test audit-only change
+        if: hashFiles('tools/apply_v46s_solver_audit.py') != ''
+        run: |
+          set -euxo pipefail
+          python tools/apply_v46s_solver_audit.py
+          python tools/test_v46s_solver_audit.py
+          python tools/test_current_audit_source_guards.py
+          python tools/test_v46g_highrate_source_guards.py
+          python tools/test_v46i_task_split_source_guards.py
+          python tools/test_rwlog_v46_converter.py
+          g++ -std=c++11 -O2 tools/test_v46n_acquisition.cpp -o /tmp/acq
+          /tmp/acq
+          g++ -std=c++17 -O2 -Wall -Wextra -Werror -Itools/host_v46o tools/test_v46o_startup.cpp -o /tmp/startup
+          /tmp/startup
+          g++ -std=c++17 -O2 -Wall -Wextra -Werror -Itools/host_v46o tools/test_v46p_run_control.cpp -o /tmp/control
+          /tmp/control
+          g++ -std=c++17 -O2 tools/test_mekf_host.cpp src/mekf6.cpp -o /tmp/mekf
+          /tmp/mekf
+          pip install platformio
+          pio run -e atoms3cam
+      - name: Commit tested application changes
+        if: hashFiles('tools/apply_v46s_solver_audit.py') != ''
+        run: |
+          set -euxo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src tools site docs
+          git diff --cached --check
+          git commit -m 'Integrate tested V46s solver timing and offline replay audit'
+          git push origin HEAD:feature/v46s-solver-audit
