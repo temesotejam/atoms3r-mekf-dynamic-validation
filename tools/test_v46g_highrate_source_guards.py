@@ -16,8 +16,8 @@ for token in (
     assert token in config, token
 assert (
     "v46l_fast_solver_shadow_20260914" in config or
-    "v46r_fast_solver_control_20260915" in config
-), "supported V46l/V46r controller identity"
+    "v46s_solver_audit_20260915" in config
+), "supported V46l/V46s controller identity"
 for token in ("M5.Imu.getType() != m5::imu_bmi270", "getImuInstancePtr(0)", "sensor_mask_accel",
               "sensor_mask_gyro", "accel_sequence", "gyro_sequence"):
     assert token in imu_cpp or token in imu_h, token
@@ -29,7 +29,7 @@ assert "raw_mekf_predicted_abs_deg_" in runner
 assert "status_.pitch_mekf_deg = raw_mekf_predicted_abs_deg_ - offset_mekf_pitch_deg_" in runner
 assert "status_.pitch_mekf_abs_deg = raw_mekf_pitch_abs_deg_" in runner
 assert "r.accel_sequence != g_v46_mekf_run_reinit.last_accel_sequence" in runner
-print("V46l/V46r high-rate / forward-prediction source guards passed")
+print("V46l/V46s high-rate / forward-prediction source guards passed")
 
 web = Path("src/web_ui.cpp").read_text(encoding="utf-8")
 assert "if(refreshInFlight)return;" in web

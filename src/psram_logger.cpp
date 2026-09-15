@@ -158,6 +158,7 @@ void PsramLogger::clear() {
   energy_control_autonomous_event_overflow_ = false;
   solver_shadow_event_count_ = 0;
   solver_shadow_event_overflow_ = false;
+  solver_audit_.clear();
   timing_probe_event_count_ = 0;
   timing_probe_event_overflow_ = false;
   calibration_result_ = CalibrationResult{};
@@ -206,6 +207,7 @@ void PsramLogger::startRun(uint16_t run_id, uint64_t run_start_us, int16_t curre
   energy_control_autonomous_event_overflow_ = false;
   solver_shadow_event_count_ = 0;
   solver_shadow_event_overflow_ = false;
+  solver_audit_.clear();
   timing_probe_event_count_ = 0;
   timing_probe_event_overflow_ = false;
   calibration_result_ = CalibrationResult{};
@@ -1335,8 +1337,11 @@ String PsramLogger::buildMetadataJson() const {
   json += "],";
   json += "\"v46n_imu_acquisition\":" + imu.acquisitionDiagnosticsJson() + ",";
   json += "\"v46p_control_worker\":" + run_control.diagnosticsJson() + ",";
+  json += "\"v46s_solver_audit\":";
+  solver_audit_.appendJson(json);
+  json += ",";
   json += "\"v46l_solver_shadow_revision\":\"v46l_discrete_ternary_shadow_20260914\",";
-  json += "\"v46l_solver_shadow_policy\":\"legacy_exhaustive_solver_controls_motor;fast_solver_runs_only_after_normal_pulse_end;metadata_only\",";
+  json += "\"v46l_solver_shadow_policy\":\"disabled_since_v46r;legacy_comparison_offline_only;use_v46s_solver_audit\",";
   json += "\"v46l_solver_shadow_event_overflow\":" + String(solver_shadow_event_overflow_ ? "true" : "false") + ",";
   json += "\"v46l_solver_shadow_events\":[";
   for (uint16_t i = 0; i < solver_shadow_event_count_; ++i) {
