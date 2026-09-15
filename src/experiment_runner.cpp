@@ -2657,6 +2657,47 @@ void ExperimentRunner::updateEnergyControlAutonomousAtZeroCross(uint32_t t_test_
   };
   const uint32_t v46l_decision_t0_us = micros();
   PsramLogger::EnergyControlAutonomousZeroCrossEvent event;
+  // V46s audit begin
+  solver_audit::Record audit;
+  audit.t_test_ms = t_test_ms;
+  audit.start_us = v46l_decision_t0_us;
+  audit.pulse_id_before = status_.pulse_id;
+  audit.model_vbat_mV = status_.beta_model_vbat_mV;
+  audit.gyro_sequence = imu_->reading().gyro_sequence;
+  audit.sample_time_us = imu_->reading().last_gyro_update_us;
+  audit.sample_time_valid = audit.gyro_sequence != 0;
+  audit.entry_sample_age_us = audit.sample_time_valid ?
+      static_cast<uint32_t>(micros() - audit.sample_time_us) : 0;
+  auto finish_audit = [&]() {
+    audit.end_us = micros();
+    audit.decision_us = static_cast<uint32_t>(audit.end_us - audit.start_us);
+    audit.exit_sample_age_us = audit.sample_time_valid ?
+        static_cast<uint32_t>(audit.end_us - audit.sample_time_us) : 0;
+    audit.pulse_id_after = status_.pulse_id;
+    audit.state_at_exit = static_cast<uint8_t>(status_.state);
+    audit.outcome_reason = event.reason;
+    audit.event_valid = event.valid;
+    audit.output_executed = event.output_executed;
+    audit.physical_side = event.physical_next_peak_side;
+    audit.command_direction = event.q_command_direction;
+    audit.i0_mA = event.i0_estimated_mA;
+    audit.free_peak_deg = event.free_next_peak_amplitude_deg;
+    audit.target_peak_deg = event.target_peak_deg;
+    audit.target_energy_j = event.target_energy_j;
+    audit.passive_energy_j = event.passive_energy_j;
+    audit.q_available_mA_s = event.q_available_mA_s;
+    audit.integral_mA_s = event.integral_side_mA_s;
+    audit.base_gain = event.g_side_base_deg_per_mA_s;
+    audit.correction_c = event.c_side_used_deg;
+    audit.correction_gain = event.g_side_corrected_deg_per_mA_s;
+    audit.correction_limit = Config::ENERGY_CONTROL_AUTONOMOUS_SIDE_RESPONSE_MAX_ABS_DEG;
+    if (audit.solver_started) {
+      audit.solver_us = static_cast<uint32_t>(audit.solver_end_us - audit.solver_start_us);
+    }
+    logger_->addSolverAuditEvent(audit);
+  };
+  solver_audit::ScopeExit<decltype(finish_audit)> audit_exit(finish_audit);
+  // V46s audit end
   event.zero_cross_time_ms = accepted_cross_ms;
   event.zero_cross_rate_dps = rate_dps;
   event.zero_cross_abs_rate_dps = fabsf(rate_dps);
@@ -2684,6 +2725,9 @@ void ExperimentRunner::updateEnergyControlAutonomousAtZeroCross(uint32_t t_test_
   event.free_next_peak_amplitude_deg = energyControlAutonomousFreeNextPeakAmplitude(
       energy_control_autonomous_last_peak_amplitude_deg_);
   const uint32_t v46l_free_model_us = static_cast<uint32_t>(micros() - v46l_free_model_t0_us);
+  // V46s audit begin
+  audit.free_model_us = v46l_free_model_us;
+  // V46s audit end
   event.passive_energy_j = energyControlPotentialJ(event.free_next_peak_amplitude_deg);
   event.target_energy_j = energyControlPotentialJ(event.target_peak_deg);
   event.q1_gain_deg_per_mA_s = energyControlAutonomousGainForSide(event.physical_next_peak_side);
@@ -2713,6 +2757,10 @@ void ExperimentRunner::updateEnergyControlAutonomousAtZeroCross(uint32_t t_test_
     return;
   }
   event.delta_energy_required_j = event.target_energy_j - event.passive_energy_j;
+  // V46s audit begin
+  audit.solver_started = 1;
+  audit.solver_start_us = micros();
+  // V46s audit end
   // V46r: the V46l shadow selector matched the legacy 0..100 ms exhaustive
   // selector on every completed hardware comparison. Promote that bounded fast
   // selector to the physical path so a control decision no longer occupies
@@ -2732,6 +2780,10 @@ void ExperimentRunner::updateEnergyControlAutonomousAtZeroCross(uint32_t t_test_
       static_cast<float>(event.q_command_direction) *
       predictCurrentGoalMa(Config::ENERGY_CONTROL_AUTONOMOUS_CURRENT_MA, fast_v);
   const float fast_tau_s = predictRiseTauS(Config::ENERGY_CONTROL_AUTONOMOUS_CURRENT_MA);
+  // V46s audit begin
+  audit.signed_target_current_mA = fast_signed_target_current_mA;
+  audit.tau_s = fast_tau_s;
+  // V46s audit end
 
   auto evaluate_width = [&](uint16_t width_ms, float target_energy_j) -> FastCandidate {
     FastCandidate c;
@@ -2782,7 +2834,19 @@ void ExperimentRunner::updateEnergyControlAutonomousAtZeroCross(uint32_t t_test_
 
   const uint32_t v46r_fast_solver_t0_us = micros();
   const FastCandidate ff = fast_pick_width(event.target_energy_j);
+  // V46s audit begin
+  audit.ff_search_us = static_cast<uint32_t>(micros() - v46r_fast_solver_t0_us);
+  audit.ff_eval_count = fast_eval_count;
+  audit.eval_count = fast_eval_count;
+  audit.ff_valid = ff.valid;
+  audit.ff_width_ms = ff.valid ? ff.width_ms : 65535;
+  audit.ff_q_mA_s = ff.q_mA_s;
+  // V46s audit end
   if (!ff.valid) {
+  // V46s audit begin
+    audit.stage = 1;
+    audit.solver_end_us = micros();
+  // V46s audit end
     event.reason = Config::ENERGY_CONTROL_AUTONOMOUS_REASON_NONFINITE_STATE;
     logger_->addEnergyControlAutonomousZeroCrossEvent(event);
     rearm_for_next_peak();
@@ -2807,14 +2871,35 @@ void ExperimentRunner::updateEnergyControlAutonomousAtZeroCross(uint32_t t_test_
       event.free_next_peak_amplitude_deg, event.physical_next_peak_side,
       corrected_q_target_mA_s, nullptr);
   const float corrected_target_energy_j = energyControlPotentialJ(corrected_target_prediction_deg);
+  // V46s audit begin
+  audit.corrected_target_energy_j = corrected_target_energy_j;
+  // V46s audit end
   if (!isfinite(corrected_target_energy_j)) {
+  // V46s audit begin
+    audit.stage = 2;
+    audit.solver_end_us = micros();
+  // V46s audit end
     event.reason = Config::ENERGY_CONTROL_AUTONOMOUS_REASON_POTENTIAL_DOMAIN;
     logger_->addEnergyControlAutonomousZeroCrossEvent(event);
     rearm_for_next_peak();
     return;
   }
+  // V46s audit begin
+  const uint32_t selected_search_t0_us = micros();
+  // V46s audit end
   const FastCandidate selected_fast = fast_pick_width(corrected_target_energy_j);
+  // V46s audit begin
+  audit.selected_search_us = static_cast<uint32_t>(micros() - selected_search_t0_us);
+  audit.selected_eval_count = fast_eval_count - audit.ff_eval_count;
+  audit.eval_count = fast_eval_count;
+  audit.selected_valid = selected_fast.valid;
+  audit.fast_selected_width_ms = selected_fast.valid ? selected_fast.width_ms : 65535;
+  // V46s audit end
   if (!selected_fast.valid) {
+  // V46s audit begin
+    audit.stage = 3;
+    audit.solver_end_us = micros();
+  // V46s audit end
     event.reason = Config::ENERGY_CONTROL_AUTONOMOUS_REASON_NONFINITE_STATE;
     logger_->addEnergyControlAutonomousZeroCrossEvent(event);
     rearm_for_next_peak();
@@ -2836,6 +2921,14 @@ void ExperimentRunner::updateEnergyControlAutonomousAtZeroCross(uint32_t t_test_
       static_cast<uint32_t>(micros() - v46r_fast_solver_t0_us);
   (void)v46r_fast_solver_us;
   (void)fast_eval_count;
+  // V46s audit begin
+  audit.fast_solver_us = v46r_fast_solver_us;
+  audit.stage = 4;
+  audit.solver_complete = 1;
+  audit.solver_end_us = micros();
+  audit.selected_width_ms = selected_width_ms;
+  audit.selected_q_mA_s = selected_q_mA_s;
+  // V46s audit end
   event.q_command_mA_s = selected_q_mA_s;
   event.q_effective_pred_mA_s = selected_q_mA_s;
   event.a_pred_base_deg = event.free_next_peak_amplitude_deg +

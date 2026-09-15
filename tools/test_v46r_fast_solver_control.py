@@ -10,10 +10,10 @@ main = (R / 'src/main.cpp').read_text(encoding='utf-8')
 manifest = json.loads((R / 'site/manifest.json').read_text(encoding='utf-8'))
 site = (R / 'site/index.html').read_text(encoding='utf-8')
 
-assert 'v46r_fast_solver_control_20260915' in config
-assert manifest['version'] == '0.46.17'
-assert 'V46r' in manifest['name']
-assert 'V46r / 0.46.17' in site
+assert 'v46s_solver_audit_20260915' in config
+assert manifest['version'] == '0.46.18'
+assert 'V46s' in manifest['name']
+assert 'V46s / 0.46.18' in site
 
 # Physical output envelope and safety limits remain unchanged.
 for token in (
@@ -32,7 +32,7 @@ start = runner.index('void ExperimentRunner::updateEnergyControlAutonomousAtZero
 end = runner.index('void ExperimentRunner::runEnergyControlAutonomousSolverShadow', start)
 control = runner[start:end]
 
-# V46r physical selector uses the bounded fast search, not the 0..100 exhaustive scans.
+# V46s physical selector uses the bounded fast search, not the 0..100 exhaustive scans.
 for token in ('struct FastCandidate', 'evaluate_width', 'fast_pick_width',
               'while (hi > lo', 'const FastCandidate ff', 'const FastCandidate selected_fast'):
     assert token in control, token
@@ -74,4 +74,4 @@ pulse = runner[runner.index('void ExperimentRunner::updateEnergyControlAutonomou
 assert 'stopActivePulse(now_ms);' in pulse
 assert 'runEnergyControlAutonomousSolverShadow();' not in pulse
 
-print('V46r fast physical selector + legacy zero-output semantics + unchanged safety guards PASS')
+print('V46s fast physical selector + legacy zero-output semantics + unchanged safety guards PASS')

@@ -4,18 +4,28 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#111827">
-  <title>AtomS3R V46r Fast Solver Motor Validation</title>
+  <title>AtomS3R V46s Fast Solver Motor Validation</title>
   <link rel="stylesheet" href="styles.css">
   <script type="module" src="https://unpkg.com/esp-web-tools@10.1.1/dist/web/install-button.js?module"></script>
 </head>
 <body>
   <main class="shell">
     <header class="hero">
-      <p class="eyebrow">ATOMS3R / V46r / MOTOR-DRIVEN VALIDATION</p>
+      <p class="eyebrow">ATOMS3R / V46s / MOTOR-DRIVEN VALIDATION</p>
       <h1>MEKF Motor Validation<br><span>Web Flasher</span></h1>
-      <p class="lead">Autonomous Energy Control V7 を実際にモータ駆動しながら、MEKF と dynamic-beta Madgwick を同時記録する V46r ファームウェアです。AtomS3R内蔵BMI270をGyro 400 Hz / Accel 200 Hzで使用し、MEKFは新しいGyroごとにpredict、新しいAccelが来たときだけ補正します。さらにposterior状態を保持したまま、制御用だけ短時間先へ非破壊予測し、ゼロクロス直後のパルス幅選択にはV46Lで実機比較した高速solverを使用します。</p>
-      <div class="badges"><span>ESP32-S3</span><span>BMI270 400/200 Hz</span><span>RWLOG v46</span><span>V46r Fast Solver</span><span>predicted control</span></div>
+      <p class="lead">Autonomous Energy Control V7 を実際にモータ駆動しながら、MEKF と dynamic-beta Madgwick を同時記録する V46s ファームウェアです。AtomS3R内蔵BMI270をGyro 400 Hz / Accel 200 Hzで使用し、MEKFは新しいGyroごとにpredict、新しいAccelが来たときだけ補正します。さらにposterior状態を保持したまま、制御用だけ短時間先へ非破壊予測し、ゼロクロス直後のパルス幅選択にはV46Lで実機比較した高速solverを使用します。</p>
+      <div class="badges"><span>ESP32-S3</span><span>BMI270 400/200 Hz</span><span>RWLOG v46</span><span>V46s Fast Solver</span><span>predicted control</span></div>
     </header>
+
+    <section class="panel important">
+      <h2>V46s / 0.46.18：高速ソルバの計測とオフライン検証</h2>
+      <p>高速ソルバの判断・出力制限・IMU停止条件はV46rと同じです。追加したのは記録です。
+      処理時間、評価回数、入力サンプルの年齢、無入力・計算失敗を含む結果を
+      <code>v46s_solver_audit</code> に保存します。旧ソルバは実機上で実行しません。</p>
+      <p>再計算用の入力はfloat32のビット列で保存します。最後の128件を保持し、上書き件数を明示します。
+      Run終了またはESTOP後のRWLOGを保存してください。新しい実機での遅延改善量は未確認です。</p>
+      <p>解析方法：<a href="https://github.com/temesotejam/atoms3r-mekf-dynamic-validation/blob/main/docs/V46S_SOLVER_AUDIT.md">V46s検証手順</a></p>
+    </section>
 
     <section class="panel important">
       <h2>V46q由来：IMU取得タスクを軽量化し、残る遅延を分解</h2>
@@ -25,12 +35,12 @@
       1 ms周期と取得6／制御4／HTTP2の優先度は変えていません。</p>
       <p>RWLOGの<code>v46n_imu_acquisition.v46q_poll_profile</code>に自動保存します。
       30秒全体の集計と100 msごとの最大ギャップ例が残ります。例は全ギャップの一覧ではありません。</p>
-      <p>V46rでは、この取得系を維持したまま高速solverを実制御へ採用しました。実機での最終的な遅延改善量は、同じ8°のモータ駆動Runで確認してください。
+      <p>V46sでは、この取得系を維持したまま高速solverを実制御へ採用しました。実機での最終的な遅延改善量は、同じ8°のモータ駆動Runで確認してください。
       ビルド成功は実機の無遅延・無欠落を保証するものではありません。</p>
     </section>
 
     <section class="panel important">
-      <h2>V46r / 0.46.17：高速ソルバ実制御 + V46q取得系</h2>
+      <h2>V46s / 0.46.18：高速ソルバ実制御 + V46q取得系</h2>
       <p>取得版：<code>v46q_lightweight_acquisition_20260914</code>。従来のV7モータ制御、
       ±300 mA・最大100 ms、立位判定、非常停止、2 ms電流監査は維持しています。</p>
       <p>開始応答後に取得連番の境界を1回だけ作り、待機中の古いキューを新しいRunへ持ち込みません。
@@ -59,7 +69,7 @@
       <h2>このページから直接書き込めます</h2>
       <p>AtomS3R を USB でPCへ接続し、Chrome または Edge のデスクトップ版で下のボタンを押してください。</p>
       <esp-web-install-button manifest="manifest.json">
-        <button slot="activate" class="primary">AtomS3RへV46rを書き込む</button>
+        <button slot="activate" class="primary">AtomS3RへV46sを書き込む</button>
         <span slot="unsupported" class="warning">このブラウザはWeb Serial / WebUSBに対応していません。PC版ChromeまたはEdgeを使用してください。</span>
       </esp-web-install-button>
       <details>
@@ -85,8 +95,8 @@
     </section>
 
     <section class="panel">
-      <h2>V46q取得系のIMU座標と更新（V46rで継承）</h2>
-      <p>実機の立位ではRaw IMUの重力がほぼ−Z方向で、動画の物理Pitch角速度は+raw gyと一致しました。V46rでも右手系を保つ <code>R_y(π)=diag(-1,+1,-1)</code> を用います。</p>
+      <h2>V46q取得系のIMU座標と更新（V46sで継承）</h2>
+      <p>実機の立位ではRaw IMUの重力がほぼ−Z方向で、動画の物理Pitch角速度は+raw gyと一致しました。V46sでも右手系を保つ <code>R_y(π)=diag(-1,+1,-1)</code> を用います。</p>
       <div class="grid">
         <article><strong>Accel</strong><p><code>(-ax, +ay, -az)</code></p></article>
         <article><strong>Gyro</strong><p><code>(-gx, +gy×0.908911)</code>と<code>-gz</code></p></article>
@@ -107,11 +117,11 @@
 
     <section class="panel safety">
       <h2>実機動作について</h2>
-      <p>このV46rはモータを実際に駆動します。可動部から手・ケーブル・治具を離し、異常時は実験画面の <strong>Emergency stop</strong> を使用してください。</p>
-      <p>Attitude revision: <code>v46r_fast_solver_control_20260915</code></p>
+      <p>このV46sはモータを実際に駆動します。可動部から手・ケーブル・治具を離し、異常時は実験画面の <strong>Emergency stop</strong> を使用してください。</p>
+      <p>Attitude revision: <code>v46s_solver_audit_20260915</code></p>
     </section>
 
-    <footer>atoms3r-mekf-dynamic-validation / V46r</footer>
+    <footer>atoms3r-mekf-dynamic-validation / V46s</footer>
   </main>
   <script>
     fetch('build-sha.txt', {cache: 'no-store'})
