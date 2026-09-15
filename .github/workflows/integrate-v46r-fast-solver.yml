@@ -5,6 +5,8 @@ on:
     paths:
       - 'tools/apply_v46r_fast_solver_control.py'
       - 'tools/test_v46r_fast_solver_control.py'
+      - 'tools/test_v46g_highrate_source_guards.py'
+      - 'tools/test_v46i_task_split_source_guards.py'
       - '.github/workflows/integrate-v46r-fast-solver.yml'
 permissions:
   contents: write
