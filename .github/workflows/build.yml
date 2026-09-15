@@ -18,10 +18,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Verify V46r controller and retained safety envelope
+      - name: Verify V46s audit and retained controller envelope
         run: |
           set -euxo pipefail
           python tools/test_v46r_fast_solver_control.py
+          python tools/test_v46s_solver_audit.py
           python tools/test_current_audit_source_guards.py
           python tools/test_v46g_highrate_source_guards.py
           python tools/test_v46i_task_split_source_guards.py
@@ -39,7 +40,7 @@ jobs:
           python -m json.tool site/manifest.json >/dev/null
       - name: Install PlatformIO
         run: pip install platformio
-      - name: Build motor-driven V46r firmware
+      - name: Build motor-driven V46s firmware
         run: pio run -e atoms3cam
       - name: Package flash images
         run: |
@@ -49,12 +50,12 @@ jobs:
           cp "$HOME/.platformio/packages/framework-arduinoespressif32/tools/partitions/boot_app0.bin" dist/
           python "$HOME/.platformio/packages/tool-esptoolpy/esptool.py" --chip esp32s3 merge_bin -o dist/merged-firmware.bin 0x0000 dist/bootloader.bin 0x8000 dist/partitions.bin 0xe000 dist/boot_app0.bin 0x10000 dist/firmware.bin
           printf '%s\n' "$GITHUB_SHA" > dist/build-sha.txt
-          printf '%s\n' 'V46r 0.46.17; bounded fast pulse-width selector; 300 mA / 100 ms envelope and IMU ESTOP retained' > dist/FLASH_LAYOUT.txt
+          printf '%s\n' 'V46s 0.46.18; solver timing and offline replay audit; V46r controller and IMU ESTOP retained' > dist/FLASH_LAYOUT.txt
           (cd dist && sha256sum *.bin > SHA256SUMS.txt)
           git diff --exit-code
       - uses: actions/upload-artifact@v4
         with:
-          name: atoms3r-v46r-${{ github.sha }}
+          name: atoms3r-v46s-${{ github.sha }}
           path: dist/
           if-no-files-found: error
           retention-days: 30
