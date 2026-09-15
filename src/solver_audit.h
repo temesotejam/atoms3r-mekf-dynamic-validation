@@ -89,7 +89,7 @@ template<unsigned Capacity> class Buffer {
     return records_[((count_ == Capacity ? next_ : 0U) + index) % Capacity];
   }
   void appendJson(String& json) const {
-    json += "{\"schema_version\":1,\"solver_revision\":\"v46r_fast_solver_control_20260915\",";
+    json += "{\"schema_version\":1,\"available\":true,\"solver_revision\":\"v46r_fast_solver_control_20260915\",";
     json += "\"policy\":\"diagnostic_only;elapsed_wall_time_includes_preemption;no_legacy_online;stopped_export\",";
     json += "\"capacity\":" + String(Capacity) + ",\"count\":" + String(count_);
     json += ",\"overwritten\":" + String(overwritten());

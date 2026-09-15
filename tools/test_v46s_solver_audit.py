@@ -21,8 +21,11 @@ def main():
     for path,digest in baseline['protected'].items():
         assert hashlib.sha256((ROOT/path).read_bytes()).hexdigest()==digest,path
     logger=(ROOT/'src/psram_logger.cpp').read_text()
-    assert logger.count('solver_audit_.clear();')==2
-    assert 'solver_audit_.appendJson(json)' in logger
+    assert logger.count('solver_audit_->clear();')==2
+    assert 'solver_audit_->appendJson(json)' in logger
+    assert 'ps_malloc(sizeof(solver_audit::Buffer<128>))' in logger
+    assert 'solver_audit::Buffer<128>* solver_audit_ = nullptr;' in (ROOT/'src/psram_logger.h').read_text()
+    assert 'audit_psram_allocation_failed' in logger
     assert 'legacy_exhaustive_solver_controls_motor' not in logger
     assert 'runEnergyControlAutonomousSolverShadow();' not in original_runner()
     print('PASS: physical controller byte-identical after removing audit-only markers; IMU/motor/MEKF/log layout unchanged')
@@ -109,7 +112,10 @@ int main() {
         try:analyze({},binary)
         except ValueError:pass
         else:raise AssertionError('old metadata incorrectly accepted')
-        print('PASS: wrong width, lost records, failed decisions, empty runs and old logs cannot report a full pass')
+        try:analyze({'v46s_solver_audit':{'available':False,'reason':'audit_psram_allocation_failed'}},binary)
+        except ValueError:pass
+        else:raise AssertionError('unavailable audit incorrectly accepted')
+        print('PASS: wrong width, lost records, failed decisions, empty runs, allocation failure and old logs cannot report a full pass')
     run(['python','tools/test_v46r_fast_solver_control.py'],cwd=ROOT)
     print('V46s audit and replay regressions PASS')
 if __name__=='__main__':main()

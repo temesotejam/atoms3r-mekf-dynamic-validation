@@ -171,6 +171,7 @@ def quantiles(values):
 def analyze(metadata,binary,crc_ok=None):
     audit=metadata.get('v46s_solver_audit')
     if not audit:raise ValueError('no V46s audit in this file; earlier firmware cannot supply missing diagnostics')
+    if audit.get('available') is False:raise ValueError('audit unavailable: '+str(audit.get('reason', 'unknown')))
     if audit.get('schema_version')!=1 or audit.get('float_fields')!=FLOAT_FIELDS or audit.get('solver_revision')!='v46r_fast_solver_control_20260915':
         raise ValueError('unsupported audit schema or solver revision')
     events=audit['events']

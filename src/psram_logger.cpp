@@ -5,6 +5,7 @@ extern ImuManager imu;
 extern RunControlWorker run_control;
 
 #include <string.h>
+#include <new>
 
 #include "config.h"
 
@@ -116,6 +117,13 @@ bool PsramLogger::begin() {
     return false;
   }
 
+  // Optional diagnostics must not consume internal task/driver RAM. No
+  // allocation occurs during a run. Failure is explicit in the export and
+  // never changes the existing controller, IMU guards, or actuator authority.
+  if (!solver_audit_) {
+    void* audit_storage = ps_malloc(sizeof(solver_audit::Buffer<128>));
+    if (audit_storage) solver_audit_ = new (audit_storage) solver_audit::Buffer<128>();
+  }
   clear();
   ready_ = true;
   last_error_ = "";
@@ -158,7 +166,7 @@ void PsramLogger::clear() {
   energy_control_autonomous_event_overflow_ = false;
   solver_shadow_event_count_ = 0;
   solver_shadow_event_overflow_ = false;
-  solver_audit_.clear();
+  if (solver_audit_) solver_audit_->clear();
   timing_probe_event_count_ = 0;
   timing_probe_event_overflow_ = false;
   calibration_result_ = CalibrationResult{};
@@ -207,7 +215,7 @@ void PsramLogger::startRun(uint16_t run_id, uint64_t run_start_us, int16_t curre
   energy_control_autonomous_event_overflow_ = false;
   solver_shadow_event_count_ = 0;
   solver_shadow_event_overflow_ = false;
-  solver_audit_.clear();
+  if (solver_audit_) solver_audit_->clear();
   timing_probe_event_count_ = 0;
   timing_probe_event_overflow_ = false;
   calibration_result_ = CalibrationResult{};
@@ -1338,7 +1346,8 @@ String PsramLogger::buildMetadataJson() const {
   json += "\"v46n_imu_acquisition\":" + imu.acquisitionDiagnosticsJson() + ",";
   json += "\"v46p_control_worker\":" + run_control.diagnosticsJson() + ",";
   json += "\"v46s_solver_audit\":";
-  solver_audit_.appendJson(json);
+  if (solver_audit_) solver_audit_->appendJson(json);
+  else json += "{\"schema_version\":1,\"available\":false,\"reason\":\"audit_psram_allocation_failed\"}";
   json += ",";
   json += "\"v46l_solver_shadow_revision\":\"v46l_discrete_ternary_shadow_20260914\",";
   json += "\"v46l_solver_shadow_policy\":\"disabled_since_v46r;legacy_comparison_offline_only;use_v46s_solver_audit\",";

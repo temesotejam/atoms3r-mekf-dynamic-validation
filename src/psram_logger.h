@@ -538,7 +538,7 @@ class PsramLogger {
   };
   void addEnergyControlAutonomousZeroCrossEvent(const EnergyControlAutonomousZeroCrossEvent& event);
   void addSolverShadowEvent(const SolverShadowEvent& event);
-  void addSolverAuditEvent(const solver_audit::Record& event) { solver_audit_.push(event); }
+  void addSolverAuditEvent(const solver_audit::Record& event) { if (solver_audit_) solver_audit_->push(event); }
   void addTimingProbeEvent(const TimingProbeEvent& event);
   bool energyControlAutonomousEventCapacityReached() const {
     return energy_control_autonomous_peak_event_count_ >= kMaxEnergyControlAutonomousEvents ||
@@ -632,7 +632,7 @@ private:
   SolverShadowEvent solver_shadow_events_[kMaxSolverShadowEvents] = {};
   uint16_t solver_shadow_event_count_ = 0;
   bool solver_shadow_event_overflow_ = false;
-  solver_audit::Buffer<128> solver_audit_;
+  solver_audit::Buffer<128>* solver_audit_ = nullptr;
   TimingProbeEvent timing_probe_events_[kMaxTimingProbeEvents] = {};
   uint16_t timing_probe_event_count_ = 0;
   bool timing_probe_event_overflow_ = false;
