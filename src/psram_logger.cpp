@@ -1345,6 +1345,7 @@ String PsramLogger::buildMetadataJson() const {
   json += "],";
   json += "\"v46n_imu_acquisition\":" + imu.acquisitionDiagnosticsJson() + ",";
   json += "\"v46p_control_worker\":" + run_control.diagnosticsJson() + ",";
+  json += "\"v46t_current_observation_policy\":\"single_snapshot_before_row_reference_clock;age_from_same_snapshot;zero_sample_time_is_missing;no_clamp\",";
   json += "\"v46s_solver_audit\":";
   if (solver_audit_) solver_audit_->appendJson(json);
   else json += "{\"schema_version\":1,\"available\":false,\"reason\":\"audit_psram_allocation_failed\"}";
