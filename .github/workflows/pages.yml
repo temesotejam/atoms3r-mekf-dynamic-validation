@@ -69,3 +69,60 @@ jobs:
     steps:
       - uses: actions/deploy-pages@v4
         id: deployment
+      - name: Verify live Web Flasher identity and binary hashes
+        env:
+          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, os, time, urllib.request
+          base = os.environ['PAGE_URL'].rstrip('/') + '/'
+          expected = os.environ['EXPECTED_SHA']
+          def get(path):
+              request = urllib.request.Request(base + path + '?verify=' + expected,
+                                               headers={'Cache-Control': 'no-cache'})
+              with urllib.request.urlopen(request, timeout=30) as response:
+                  return response.read()
+          last_error = None
+          for attempt in range(8):
+              try:
+                  published = get('build-sha.txt').decode().strip()
+                  if published != expected:
+                      raise ValueError('Published build SHA differs: ' + published)
+                  manifest = json.loads(get('manifest.json'))
+                  if manifest['version'] != '0.46.18':
+                      raise ValueError('Unexpected firmware version')
+                  if 'V46s / 0.46.18' not in get('index.html').decode():
+                      raise ValueError('Published page label differs')
+                  builds = manifest['builds']
+                  if len(builds) != 1 or builds[0]['chipFamily'] != 'ESP32-S3':
+                      raise ValueError('Unexpected chip manifest')
+                  expected_parts = {'firmware/bootloader.bin': 0,
+                                    'firmware/partitions.bin': 32768,
+                                    'firmware/boot_app0.bin': 57344,
+                                    'firmware/firmware.bin': 65536}
+                  parts = builds[0]['parts']
+                  if len(parts) != 4 or {p['path']: p['offset'] for p in parts} != expected_parts:
+                      raise ValueError('Unexpected flash paths or offsets')
+                  hashes = {}
+                  for line in get('firmware/SHA256SUMS.txt').decode().splitlines():
+                      digest, name = line.split(maxsplit=1)
+                      hashes[name.lstrip('*')] = digest
+                  verified = {}
+                  for path in expected_parts:
+                      content = get(path)
+                      digest = hashlib.sha256(content).hexdigest()
+                      if not content or digest != hashes[path.split('/')[-1]]:
+                          raise ValueError('Published binary checksum mismatch: ' + path)
+                      verified[path] = {'bytes': len(content), 'sha256': digest}
+                  print(json.dumps({'published_sha': published, 'version': manifest['version'],
+                                    'verified_assets': verified}, indent=2))
+                  break
+              except Exception as error:
+                  last_error = error
+                  print('Publication check attempt', attempt + 1, 'failed:', error, flush=True)
+                  if attempt < 7:
+                      time.sleep(10)
+          else:
+              raise SystemExit('Live Web Flasher verification failed: ' + str(last_error))
+          PY
