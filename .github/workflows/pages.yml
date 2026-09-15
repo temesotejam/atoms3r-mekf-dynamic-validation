@@ -20,9 +20,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Verify V46t release, current observation, audit and retained safety guards
+      - name: Verify V46u timing and retained safety guards
         run: |
           set -euxo pipefail
+          python tools/test_v46u_timing.py
           python tools/test_v46t_current_observation.py
           python tools/test_v46r_fast_solver_control.py
           python tools/test_v46s_solver_audit.py
@@ -39,12 +40,16 @@ jobs:
           g++ -std=c++17 -O2 tools/test_mekf_host.cpp src/mekf6.cpp -o /tmp/test_mekf
           /tmp/test_mekf
           python -m json.tool site/manifest.json >/dev/null
-          grep -q 'V46t / 0.46.19' site/index.html
-          grep -q 'v46t_current_observation_20260915' src/config.h
+          grep -q 'V46u / 0.46.20' site/index.html
+          grep -q 'v46u_timing_reader_20260915' src/config.h
       - name: Install PlatformIO
         run: pip install platformio
-      - name: Build V46t motor-driven firmware
-        run: pio run -e atoms3cam
+      - name: Build V46u firmware with verified BMI270 patch
+        run: |
+          set -euxo pipefail
+          pio pkg install -e atoms3cam
+          pio run -e atoms3cam
+          test -s bmi270-build-patch.json
       - name: Assemble verified web flasher
         run: |
           set -euxo pipefail
@@ -52,6 +57,7 @@ jobs:
           cp -R site/. _site/
           cp .pio/build/atoms3cam/{bootloader.bin,partitions.bin,firmware.bin} _site/firmware/
           cp "$HOME/.platformio/packages/framework-arduinoespressif32/tools/partitions/boot_app0.bin" _site/firmware/
+          cp bmi270-build-patch.json _site/
           printf '%s\n' "$GITHUB_SHA" > _site/build-sha.txt
           (cd _site/firmware && sha256sum *.bin > SHA256SUMS.txt)
           git diff --exit-code
@@ -70,7 +76,7 @@ jobs:
     steps:
       - uses: actions/deploy-pages@v4
         id: deployment
-      - name: Verify live Web Flasher identity and binary hashes
+      - name: Verify live Web Flasher identity, driver provenance and binary hashes
         env:
           PAGE_URL: ${{ steps.deployment.outputs.page_url }}
           EXPECTED_SHA: ${{ github.sha }}
@@ -91,10 +97,17 @@ jobs:
                   if published != expected:
                       raise ValueError('Published build SHA differs: ' + published)
                   manifest = json.loads(get('manifest.json'))
-                  if manifest['version'] != '0.46.19':
+                  if manifest['version'] != '0.46.20':
                       raise ValueError('Unexpected firmware version')
-                  if 'V46t / 0.46.19' not in get('index.html').decode():
+                  if 'V46u / 0.46.20' not in get('index.html').decode():
                       raise ValueError('Published page label differs')
+                  provenance = json.loads(get('bmi270-build-patch.json'))
+                  if provenance['upstream_git_blob'] != '41732382bbdfe413be758748bca24d9a15a3a1d8':
+                      raise ValueError('Unexpected upstream BMI270 source')
+                  if provenance['patched_sha256'] != '54bf8f7c9016033cee6015331ed65a35b56e74375040ba4994fbb06cee0b430b':
+                      raise ValueError('Unexpected BMI270 transport patch')
+                  if provenance['header_sha256'] != 'bfdb1485c7fbfe3ecc0953a4b0d617863b3649b766581bd7ac8ab668be10a633':
+                      raise ValueError('Unexpected selective reader')
                   builds = manifest['builds']
                   if len(builds) != 1 or builds[0]['chipFamily'] != 'ESP32-S3':
                       raise ValueError('Unexpected chip manifest')
@@ -117,7 +130,7 @@ jobs:
                           raise ValueError('Published binary checksum mismatch: ' + path)
                       verified[path] = {'bytes': len(content), 'sha256': digest}
                   print(json.dumps({'published_sha': published, 'version': manifest['version'],
-                                    'verified_assets': verified}, indent=2))
+                                    'driver': provenance, 'verified_assets': verified}, indent=2))
                   break
               except Exception as error:
                   last_error = error

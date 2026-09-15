@@ -3,6 +3,7 @@
 #include <M5Unified.h>
 #include "config.h"
 #include "upright_pose_guide.h"
+#include "bmi270_timing_reader.h"
 
 
 namespace {
@@ -231,6 +232,12 @@ void ImuManager::captureSensor() {
   const uint32_t now_us = micros();
   const auto mask = M5.Imu.update();
   const uint32_t update_done_us = micros();
+  const auto driver = bmi270_timing::lastRead();
+  poll_observation_.driver_called = driver.called;
+  poll_observation_.driver_status_us = driver.status_us;
+  poll_observation_.driver_data_us = driver.data_us;
+  poll_observation_.driver_data_bytes = driver.data_bytes;
+  poll_observation_.driver_failures = driver.failures;
   poll_observation_.update_us = static_cast<uint32_t>(update_done_us - now_us);
   const uint8_t bits = static_cast<uint8_t>(mask);
   poll_observation_.mask = bits;
@@ -592,6 +599,17 @@ String ImuManager::pollProfileJson() const {
   s += ",\"long_gaps_over_4ms\":" + String(p.long_gaps);
   s += ",\"outside_detail_window\":" + String(p.outside_buckets);
   s += ",\"record_overhead_max_us\":" + String(p.record_overhead_max_us);
+  s += ",\"v46u_timing\":{\"driver_calls\":" + String(p.driver_calls);
+  s += ",\"driver_failures\":" + String(p.driver_failures);
+  s += ",\"data_bytes\":" + String(p.driver_bytes);
+  s += ",\"status_read_max_us\":" + String(p.driver_status.maximum);
+  s += ",\"data_read_max_us\":" + String(p.driver_data.maximum);
+  s += ",\"poll_work_budget_us\":1000,\"poll_work_count\":" + String(p.poll_work_deadline.count);
+  s += ",\"poll_work_over_budget\":" + String(p.poll_work_deadline.over);
+  s += ",\"host_gyro_interval_budget_us\":2500,\"host_gyro_interval_count\":" + String(p.gyro_interval_deadline.count);
+  s += ",\"host_gyro_interval_over_budget\":" + String(p.gyro_interval_deadline.over);
+  s += ",\"host_gyro_interval_max_us\":" + String(p.gyro_interval_deadline.maximum);
+  s += ",\"sensor_clock_verified\":false,\"policy\":\"strict_greater_than;host_polling_not_FIFO;no_tolerance_hidden\"}";
   static const char* names[ImuPollProfile::STAGES] = {
     "latest_notify_age", "observed_callback_gap", "poll_start_interval", "update_api",
     "convert_api", "validate_pack", "publish_queue", "poll_total", "overrun_yield"};

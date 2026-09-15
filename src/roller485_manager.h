@@ -4,8 +4,10 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
 #include <freertos/task.h>
+#include "timing_deadline.h"
 
 struct RollerTelemetry {
+  timing_deadline::Counter pulse_current_read_work, pulse_current_intervals;
   bool roller_ok = false;
   int16_t actual_current_mA = 0;
   uint16_t battery_mV = 0;

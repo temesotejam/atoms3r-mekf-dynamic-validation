@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <type_traits>
+#include "timing_deadline.h"
 
 // V46q diagnostic only. One writer: the Core1 reader. No I/O, allocation or
 // floating point. Export ONLY while measurement is inactive, on the idle owner.
@@ -12,6 +13,10 @@ struct ImuPollObservation {
   uint32_t period_us = 0, update_us = 0, convert_us = 0, pack_us = 0;
   uint32_t publish_us = 0, total_us = 0, wakes = 0;
   uint32_t previous_total_us = 0, previous_yield_us = 0;
+  uint32_t driver_status_us = 0, driver_data_us = 0;
+  uint16_t driver_data_bytes = 0;
+  uint8_t driver_failures = 0;
+  bool driver_called = false;
   uint8_t mask = 0;
   bool has_notify = false, fresh_gyro = false, forced_yield = false;
 };
@@ -42,6 +47,9 @@ struct ImuPollProfile {
   uint32_t coalesced_wakes = 0, forced_yields = 0, long_gaps = 0;
   uint32_t outside_buckets = 0, last_callback_sequence = 0;
   uint32_t record_overhead_max_us = 0;
+  timing_deadline::Counter poll_work_deadline, gyro_interval_deadline;
+  timing_deadline::Counter driver_status, driver_data;
+  uint32_t driver_calls = 0, driver_failures = 0, driver_bytes = 0;
   Stats stage[STAGES];
   Second seconds[kSeconds];
   Gap worst_gap[kBuckets];
@@ -56,6 +64,14 @@ struct ImuPollProfile {
   void record(const ImuPollObservation& o) {
     if (!initialized || static_cast<int32_t>(o.start_us - epoch_us) < 0) return;
     ++polls; if (o.fresh_gyro) ++gyro; if (!o.mask) ++no_data;
+    poll_work_deadline.add(o.total_us, 1000);
+    if (o.fresh_gyro) gyro_interval_deadline.add(o.dt_us, 2500);
+    if (o.driver_called) {
+      ++driver_calls; driver_failures += o.driver_failures;
+      driver_bytes += o.driver_data_bytes;
+      driver_status.add(o.driver_status_us, 1000);
+      driver_data.add(o.driver_data_us, 1000);
+    }
     if (o.wakes > 1) coalesced_wakes += o.wakes - 1;
     if (o.forced_yield) ++forced_yields;
     if (o.has_notify) {

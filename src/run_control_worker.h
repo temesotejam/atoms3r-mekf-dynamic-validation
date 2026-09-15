@@ -4,6 +4,7 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <string.h>
+#include "timing_deadline.h"
 
 // The Arduino task owns the controller while idle. After the Start HTTP
 // response, ownership is transferred to this worker until END_SYNC/ESTOP.
@@ -34,6 +35,7 @@ class RunControlWorker {
     uint32_t stop_requests = 0, stop_consumed = 0;
     int32_t observed_core = -1;
     uint32_t observed_priority = 0;
+    timing_deadline::Counter sample_completion, runner_work;
     Timing recent[16] = {};
   };
 
@@ -110,6 +112,14 @@ class RunControlWorker {
     audit_.observed_core = core; audit_.observed_priority = priority;
     portEXIT_CRITICAL(&mux_);
   }
+  void recordSampleCompletion(bool measurement, bool fresh, uint32_t sample_us,
+                              uint32_t done_us, uint32_t runner_us) {
+    if (!measurement || !fresh) return;
+    portENTER_CRITICAL(&mux_);
+    audit_.sample_completion.add(static_cast<uint32_t>(done_us - sample_us), 2500);
+    audit_.runner_work.add(runner_us, 2500);
+    portEXIT_CRITICAL(&mux_);
+  }
   String diagnosticsJson() const {
     Audit a;
     portENTER_CRITICAL(&mux_);
@@ -127,6 +137,15 @@ class RunControlWorker {
     json += ",\"max_path_us\":" + String(a.max_path_us);
     json += ",\"stop_requests\":" + String(a.stop_requests);
     json += ",\"stop_consumed\":" + String(a.stop_consumed);
+    json += ",\"v46u_deadline\":{\"budget_us\":2500,\"count\":" + String(a.sample_completion.count);
+    json += ",\"over_budget\":" + String(a.sample_completion.over);
+    json += ",\"max_us\":" + String(a.sample_completion.maximum);
+    json += ",\"mean_us\":" + String(a.sample_completion.count ?
+        static_cast<double>(a.sample_completion.sum) / a.sample_completion.count : 0.0, 3);
+    json += ",\"runner_over_budget\":" + String(a.runner_work.over);
+    json += ",\"runner_max_us\":" + String(a.runner_work.maximum);
+    json += ",\"all_observed_within_budget\":" + String(a.sample_completion.passed() ? "true" : "false");
+    json += ",\"scope\":\"RUNNING_fresh_gyro_only;host_acquisition_to_runner_return;not_sensor_capture_to_motor_apply\"}";
     json += ",\"recent_steps\":[";
     const uint32_t count = a.steps < 16 ? a.steps : 16;
     for (uint32_t i = 0; i < count; ++i) {
