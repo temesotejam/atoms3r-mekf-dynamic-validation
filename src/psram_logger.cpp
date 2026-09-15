@@ -3,6 +3,8 @@
 extern ImuManager imu;
 #include "run_control_worker.h"
 extern RunControlWorker run_control;
+#include "roller485_manager.h"
+extern Roller485Manager roller;
 
 #include <string.h>
 #include <new>
@@ -1345,6 +1347,16 @@ String PsramLogger::buildMetadataJson() const {
   json += "],";
   json += "\"v46n_imu_acquisition\":" + imu.acquisitionDiagnosticsJson() + ",";
   json += "\"v46p_control_worker\":" + run_control.diagnosticsJson() + ",";
+  {
+    const auto t = roller.telemetrySnapshot();
+    json += "\"v46u_current_timing\":{\"scope\":\"since_boot_pulse_audit_only_not_per_run\",\"budget_us\":2000";
+    json += ",\"read_count\":" + String(t.pulse_current_read_work.count);
+    json += ",\"read_over_budget\":" + String(t.pulse_current_read_work.over);
+    json += ",\"read_max_us\":" + String(t.pulse_current_read_work.maximum);
+    json += ",\"interval_count\":" + String(t.pulse_current_intervals.count);
+    json += ",\"interval_over_budget\":" + String(t.pulse_current_intervals.over);
+    json += ",\"interval_max_us\":" + String(t.pulse_current_intervals.maximum) + "},";
+  }
   json += "\"v46t_current_observation_policy\":\"single_snapshot_before_row_reference_clock;age_from_same_snapshot;zero_sample_time_is_missing;no_clamp\",";
   json += "\"v46s_solver_audit\":";
   if (solver_audit_) solver_audit_->appendJson(json);

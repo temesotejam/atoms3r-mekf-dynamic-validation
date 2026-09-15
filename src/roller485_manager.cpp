@@ -350,12 +350,17 @@ bool Roller485Manager::ok() const {
 }
 
 bool Roller485Manager::readCurrentFresh(bool audit_sample) {
+  const uint32_t timing_start = micros();
   int32_t current_raw = 0;
   ++telemetry_.current_sequence;
   if (!readI32(REG_CURRENT_READBACK, current_raw)) {
     recordCurrentReadFailure(audit_sample);
+    if (audit_sample) telemetry_.pulse_current_read_work.add(
+        static_cast<uint32_t>(micros() - timing_start), 2000);
     return false;
   }
+  if (audit_sample) telemetry_.pulse_current_read_work.add(
+      static_cast<uint32_t>(micros() - timing_start), 2000);
   recordFreshCurrent(current_raw, micros(), audit_sample);
   return true;
 }
@@ -371,6 +376,7 @@ void Roller485Manager::recordFreshCurrent(int32_t current_raw, uint32_t sample_t
   const int16_t current_mA = telemetry_.actual_current_mA;
   if (current_audit_has_previous_sample_) {
     const uint32_t dt_us = static_cast<uint32_t>(sample_time_us - current_audit_previous_sample_us_);
+    telemetry_.pulse_current_intervals.add(dt_us, 2000);
     if (dt_us > 0 && dt_us <= 50000UL && isfinite(telemetry_.q_meas_observed_mA_s)) {
       telemetry_.q_meas_observed_mA_s += 0.5f *
           (fabsf(static_cast<float>(current_audit_previous_mA_)) + fabsf(static_cast<float>(current_mA))) *

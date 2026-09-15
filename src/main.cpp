@@ -179,10 +179,16 @@ static bool runControlStep(void*) {
   imu.update();
   checkAcquisitionHealth();
   const uint32_t imu_update_us = static_cast<uint32_t>(micros() - imu_t0_us);
+  const bool timing_measurement = runner.status().state == ExperimentState::RUNNING_BATCH_SWEEP;
+  const bool timing_fresh = imu.reading().gyro_fresh;
+  const uint32_t timing_sample_us = imu.reading().last_gyro_update_us;
   const uint32_t runner_t0_us = micros();
   runner.update();
   const uint32_t runner_update_us = static_cast<uint32_t>(micros() - runner_t0_us);
-  const uint32_t path_us = static_cast<uint32_t>(micros() - loop_start_us);
+  const uint32_t timing_done_us = micros();
+  const uint32_t path_us = static_cast<uint32_t>(timing_done_us - loop_start_us);
+  run_control.recordSampleCompletion(timing_measurement, timing_fresh, timing_sample_us,
+                                    timing_done_us, runner_update_us);
   if (v46k_timing_probe_active) runner.recordTimingProbeLoop(imu_update_us, runner_update_us, path_us);
   runner.setLoopDt(path_us);
   updateAcquisitionContext();
