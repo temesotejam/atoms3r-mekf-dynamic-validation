@@ -5605,6 +5605,9 @@ void ExperimentRunner::logSampleIfDue() {
 
 void ExperimentRunner::logSampleNow() {
   if (!logger_ || !logger_->ready()) return;
+  // V46t: copy telemetry before taking its reference clock. Never re-read it
+  // while constructing this row; Core0 may publish between any two statements.
+  const RollerTelemetry roller_telemetry = roller_->telemetrySnapshot();
   const uint32_t now_us = micros();
   if (logger_->full()) {
     requestEmergencyStop("log_buffer_full");
@@ -5665,12 +5668,12 @@ void ExperimentRunner::logSampleNow() {
   row.gy_cdps = centi(status_.gy_dps);
   row.gz_cdps = centi(status_.gz_dps);
   row.acc_norm_mg = milli(status_.acc_norm_g);
-  const RollerTelemetry roller_telemetry = roller_->telemetrySnapshot();
   row.roller_actual_current_mA = roller_telemetry.actual_current_mA;
   row.roller_battery_mV = roller_telemetry.battery_mV;
   row.roller_current_sample_time_us = roller_telemetry.current_sample_time_us;
   row.roller_current_sequence = roller_telemetry.current_sequence;
-  row.roller_current_age_us = roller_->currentAgeUs(now_us);
+  row.roller_current_age_us = roller_telemetry.current_sample_time_us == 0
+      ? UINT32_MAX : static_cast<uint32_t>(now_us - roller_telemetry.current_sample_time_us);
   row.roller_current_read_failure_count = roller_telemetry.current_read_failure_count;
   row.roller_q_meas_observed_mAms = isfinite(roller_telemetry.q_meas_observed_mA_s)
       ? static_cast<int32_t>(lroundf(roller_telemetry.q_meas_observed_mA_s * 1000.0f)) : LOG_NAN_I32;
