@@ -2441,9 +2441,8 @@ void ExperimentRunner::updateEnergyControlAutonomousPulse(uint32_t now_ms) {
     // into the next physical half-cycle.
     energy_control_autonomous_half_cycle_state_ = EnergyControlAutonomousHalfCycleState::WAIT_PEAK;
     resetEnergyControlAutonomousPeakTracker(true);
-    // V46l shadow runs only after stopActivePulse(); it cannot delay or
-    // alter the legacy physical command selected at the zero crossing.
-    runEnergyControlAutonomousSolverShadow();
+    // V46r has no post-pulse solver workload on Core1. All controller decisions
+    // were completed by the bounded fast selector at the accepted zero crossing.
   }
 }
 bool ExperimentRunner::recordEnergyControlAutonomousPeak(uint32_t peak_ms, int8_t physical_side,
@@ -2714,28 +2713,84 @@ void ExperimentRunner::updateEnergyControlAutonomousAtZeroCross(uint32_t t_test_
     return;
   }
   event.delta_energy_required_j = event.target_energy_j - event.passive_energy_j;
-  const uint32_t v46l_ff_scan_t0_us = micros();
-  uint16_t ff_width_ms = 0;
-  float ff_q_mA_s = 0.0f;
-  float ff_energy_j = energyControlPotentialJ(zero_q_corrected_prediction_deg);
-  float ff_error_j = fabsf(event.target_energy_j - ff_energy_j);
-  for (uint16_t width_ms = Config::ENERGY_CONTROL_AUTONOMOUS_MIN_PULSE_MS;
-       width_ms <= Config::ENERGY_CONTROL_AUTONOMOUS_MAX_PULSE_MS; ++width_ms) {
-    const float q_mA_s = width_ms == 0 ? 0.0f : fabsf(predictedChargeMaS(event.i0_estimated_mA,
-        event.q_command_direction, static_cast<float>(width_ms), Config::ENERGY_CONTROL_AUTONOMOUS_CURRENT_MA));
+  // V46r: the V46l shadow selector matched the legacy 0..100 ms exhaustive
+  // selector on every completed hardware comparison. Promote that bounded fast
+  // selector to the physical path so a control decision no longer occupies
+  // Core1 for ~7 ms. Safety limits are unchanged; invalid solver states coast.
+  struct FastCandidate {
+    bool valid = false;
+    uint16_t width_ms = 0;
+    float q_mA_s = NAN;
+    float energy_j = NAN;
+    float error_j = NAN;
+  };
+  uint16_t fast_eval_count = 0;
+  const float fast_v = status_.beta_model_vbat_mV > 0
+      ? static_cast<float>(status_.beta_model_vbat_mV) / 1000.0f
+      : Config::MODEL_VBAT_REFERENCE_V;
+  const float fast_signed_target_current_mA =
+      static_cast<float>(event.q_command_direction) *
+      predictCurrentGoalMa(Config::ENERGY_CONTROL_AUTONOMOUS_CURRENT_MA, fast_v);
+  const float fast_tau_s = predictRiseTauS(Config::ENERGY_CONTROL_AUTONOMOUS_CURRENT_MA);
+
+  auto evaluate_width = [&](uint16_t width_ms, float target_energy_j) -> FastCandidate {
+    FastCandidate c;
+    c.width_ms = width_ms;
+    ++fast_eval_count;
+    float q_mA_s = 0.0f;
+    if (width_ms > 0) {
+      const float t_s = static_cast<float>(width_ms) / 1000.0f;
+      const float signed_q_mA_s =
+          fast_signed_target_current_mA * t_s +
+          (event.i0_estimated_mA - fast_signed_target_current_mA) * fast_tau_s *
+              (1.0f - expf(-t_s / fast_tau_s));
+      q_mA_s = fabsf(signed_q_mA_s);
+    }
     const float predicted_peak_deg = energyControlAutonomousCorrectedPrediction(
         event.free_next_peak_amplitude_deg, event.physical_next_peak_side, q_mA_s, nullptr);
     const float energy_j = energyControlPotentialJ(predicted_peak_deg);
-    if (!isfinite(q_mA_s) || !isfinite(energy_j)) break;
-    const float error_j = fabsf(event.target_energy_j - energy_j);
-    if (error_j < ff_error_j) {
-      ff_width_ms = width_ms;
-      ff_q_mA_s = q_mA_s;
-      ff_energy_j = energy_j;
-      ff_error_j = error_j;
+    if (!isfinite(q_mA_s) || !isfinite(energy_j) || !isfinite(target_energy_j)) return c;
+    c.valid = true;
+    c.q_mA_s = q_mA_s;
+    c.energy_j = energy_j;
+    c.error_j = fabsf(target_energy_j - energy_j);
+    return c;
+  };
+
+  auto fast_pick_width = [&](float target_energy_j) -> FastCandidate {
+    uint16_t lo = Config::ENERGY_CONTROL_AUTONOMOUS_MIN_PULSE_MS;
+    uint16_t hi = Config::ENERGY_CONTROL_AUTONOMOUS_MAX_PULSE_MS;
+    while (hi > lo && static_cast<uint16_t>(hi - lo) > 8U) {
+      const uint16_t third = static_cast<uint16_t>((hi - lo) / 3U);
+      if (third == 0) break;
+      const uint16_t m1 = static_cast<uint16_t>(lo + third);
+      const uint16_t m2 = static_cast<uint16_t>(hi - third);
+      const FastCandidate c1 = evaluate_width(m1, target_energy_j);
+      const FastCandidate c2 = evaluate_width(m2, target_energy_j);
+      if (!c1.valid || !c2.valid) return FastCandidate{};
+      if (c1.error_j <= c2.error_j) hi = m2;
+      else lo = m1;
     }
+    FastCandidate best;
+    for (uint16_t width_ms = lo; width_ms <= hi; ++width_ms) {
+      const FastCandidate c = evaluate_width(width_ms, target_energy_j);
+      if (!c.valid) return FastCandidate{};
+      if (!best.valid || c.error_j < best.error_j) best = c;
+    }
+    return best;
+  };
+
+  const uint32_t v46r_fast_solver_t0_us = micros();
+  const FastCandidate ff = fast_pick_width(event.target_energy_j);
+  if (!ff.valid) {
+    event.reason = Config::ENERGY_CONTROL_AUTONOMOUS_REASON_NONFINITE_STATE;
+    logger_->addEnergyControlAutonomousZeroCrossEvent(event);
+    rearm_for_next_peak();
+    return;
   }
-  const uint32_t v46l_ff_scan_us = static_cast<uint32_t>(micros() - v46l_ff_scan_t0_us);
+  const uint16_t ff_width_ms = ff.width_ms;
+  const float ff_q_mA_s = ff.q_mA_s;
+  const float ff_energy_j = ff.energy_j;
   event.q_ff_energy_mA_s = ff_q_mA_s;
   event.q_angle_diagnostic_mA_s = fmaxf(0.0f, (event.target_peak_deg -
       event.free_next_peak_amplitude_deg) / event.q1_gain_deg_per_mA_s);
@@ -2758,50 +2813,29 @@ void ExperimentRunner::updateEnergyControlAutonomousAtZeroCross(uint32_t t_test_
     rearm_for_next_peak();
     return;
   }
-  const uint32_t v46l_selected_scan_t0_us = micros();
+  const FastCandidate selected_fast = fast_pick_width(corrected_target_energy_j);
+  if (!selected_fast.valid) {
+    event.reason = Config::ENERGY_CONTROL_AUTONOMOUS_REASON_NONFINITE_STATE;
+    logger_->addEnergyControlAutonomousZeroCrossEvent(event);
+    rearm_for_next_peak();
+    return;
+  }
+  // Preserve the legacy selector's special zero-output baseline exactly. The
+  // exhaustive implementation started from passive_energy_j and only replaced
+  // it on a strict error improvement. This matters at the no-output boundary.
   uint16_t selected_width_ms = 0;
   float selected_q_mA_s = 0.0f;
   float selected_energy_j = event.passive_energy_j;
-  float selected_error_j = fabsf(corrected_target_energy_j - selected_energy_j);
-  for (uint16_t width_ms = Config::ENERGY_CONTROL_AUTONOMOUS_MIN_PULSE_MS;
-       width_ms <= Config::ENERGY_CONTROL_AUTONOMOUS_MAX_PULSE_MS; ++width_ms) {
-    const float q_mA_s = width_ms == 0 ? 0.0f : fabsf(predictedChargeMaS(event.i0_estimated_mA,
-        event.q_command_direction, static_cast<float>(width_ms), Config::ENERGY_CONTROL_AUTONOMOUS_CURRENT_MA));
-    const float predicted_peak_deg = energyControlAutonomousCorrectedPrediction(
-        event.free_next_peak_amplitude_deg, event.physical_next_peak_side, q_mA_s, nullptr);
-    const float energy_j = energyControlPotentialJ(predicted_peak_deg);
-    if (!isfinite(q_mA_s) || !isfinite(energy_j)) break;
-    const float error_j = fabsf(corrected_target_energy_j - energy_j);
-    if (error_j < selected_error_j) {
-      selected_width_ms = width_ms;
-      selected_q_mA_s = q_mA_s;
-      selected_energy_j = energy_j;
-      selected_error_j = error_j;
-    }
+  const float zero_output_error_j = fabsf(corrected_target_energy_j - selected_energy_j);
+  if (selected_fast.error_j < zero_output_error_j) {
+    selected_width_ms = selected_fast.width_ms;
+    selected_q_mA_s = selected_fast.q_mA_s;
+    selected_energy_j = selected_fast.energy_j;
   }
-  const uint32_t v46l_selected_scan_us =
-      static_cast<uint32_t>(micros() - v46l_selected_scan_t0_us);
-  PsramLogger::SolverShadowEvent v46l_shadow;
-  v46l_shadow.t_test_ms = t_test_ms;
-  v46l_shadow.physical_next_peak_side = event.physical_next_peak_side;
-  v46l_shadow.q_command_direction = event.q_command_direction;
-  v46l_shadow.command_current_mA = Config::ENERGY_CONTROL_AUTONOMOUS_CURRENT_MA;
-  v46l_shadow.model_vbat_mV = status_.beta_model_vbat_mV;
-  v46l_shadow.i0_estimated_mA = event.i0_estimated_mA;
-  v46l_shadow.free_next_peak_deg = event.free_next_peak_amplitude_deg;
-  v46l_shadow.target_peak_deg = event.target_peak_deg;
-  v46l_shadow.target_energy_j = event.target_energy_j;
-  v46l_shadow.q_available_mA_s = event.q_available_mA_s;
-  v46l_shadow.integral_side_mA_s = event.integral_side_mA_s;
-  v46l_shadow.legacy_ff_width_ms = ff_width_ms;
-  v46l_shadow.legacy_ff_q_mA_s = ff_q_mA_s;
-  v46l_shadow.legacy_selected_width_ms = selected_width_ms;
-  v46l_shadow.legacy_selected_q_mA_s = selected_q_mA_s;
-  v46l_shadow.free_model_us = v46l_free_model_us;
-  v46l_shadow.legacy_ff_scan_us = v46l_ff_scan_us;
-  v46l_shadow.legacy_selected_scan_us = v46l_selected_scan_us;
-  v46l_shadow.legacy_decision_us =
-      static_cast<uint32_t>(micros() - v46l_decision_t0_us);
+  const uint32_t v46r_fast_solver_us =
+      static_cast<uint32_t>(micros() - v46r_fast_solver_t0_us);
+  (void)v46r_fast_solver_us;
+  (void)fast_eval_count;
   event.q_command_mA_s = selected_q_mA_s;
   event.q_effective_pred_mA_s = selected_q_mA_s;
   event.a_pred_base_deg = event.free_next_peak_amplitude_deg +
@@ -2858,9 +2892,8 @@ void ExperimentRunner::updateEnergyControlAutonomousAtZeroCross(uint32_t t_test_
     rearm_for_next_peak();
     return;
   }
-  v46l_shadow.pulse_id = status_.pulse_id;
-  solver_shadow_event_ = v46l_shadow;
-  solver_shadow_pending_ = true;
+  // V46r performs no deferred solver shadow after the pulse. The old deferred
+  // computation consumed Core1 time without affecting the already-issued command.
   event.output_executed = true;
   event.valid = true;
   event.reason = Config::ENERGY_CONTROL_AUTONOMOUS_REASON_NONE;
