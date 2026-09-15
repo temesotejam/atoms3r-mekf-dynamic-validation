@@ -5,6 +5,7 @@ on:
     paths:
       - '.github/workflows/v46s-audit-integration.yml'
       - 'tools/apply_v46s_solver_audit.py'
+      - 'tools/finalize_v46s_storage.py'
 permissions:
   contents: write
 jobs:
@@ -30,10 +31,14 @@ jobs:
         with:
           python-version: '3.11'
       - name: Apply and test audit-only change
-        if: hashFiles('tools/apply_v46s_solver_audit.py') != ''
         run: |
           set -euxo pipefail
-          python tools/apply_v46s_solver_audit.py
+          if ! grep -q 'v46s_solver_audit_20260915' src/config.h; then
+            python tools/apply_v46s_solver_audit.py
+          fi
+          if ! grep -q 'audit_psram_allocation_failed' src/psram_logger.cpp; then
+            python tools/finalize_v46s_storage.py
+          fi
           python tools/test_v46s_solver_audit.py
           python tools/test_current_audit_source_guards.py
           python tools/test_v46g_highrate_source_guards.py
@@ -50,12 +55,25 @@ jobs:
           pip install platformio
           pio run -e atoms3cam
       - name: Commit tested application changes
-        if: hashFiles('tools/apply_v46s_solver_audit.py') != ''
         run: |
           set -euxo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add src tools site docs
           git diff --cached --check
-          git commit -m 'Integrate tested V46s solver timing and offline replay audit'
-          git push origin HEAD:feature/v46s-solver-audit
+          if ! git diff --cached --quiet; then
+            git commit -m 'Keep tested V46s audit storage in PSRAM without changing control'
+            git push origin HEAD:feature/v46s-solver-audit
+          fi
+      - name: Preserve tested source and firmware
+        run: |
+          mkdir -p /tmp/tested-source/source /tmp/tested-source/firmware
+          git archive HEAD | tar -x -C /tmp/tested-source/source
+          git rev-parse HEAD > /tmp/tested-source/source-sha.txt
+          cp .pio/build/atoms3cam/{firmware.bin,firmware.elf} /tmp/tested-source/firmware/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v46s-tested-source
+          path: /tmp/tested-source/
+          include-hidden-files: true
+          retention-days: 7
