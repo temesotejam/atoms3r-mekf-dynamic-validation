@@ -12,9 +12,12 @@ mekf_cpp = (SRC / "mekf6.cpp").read_text(encoding="utf-8")
 for token in (
     "IMU_POLL_PERIOD_US = 1000UL", "BMI270_GYRO_ODR_HZ = 400", "BMI270_ACCEL_ODR_HZ = 200",
     "BMI270_GYRO_ODR_CODE = 0x0A", "BMI270_ACCEL_ODR_CODE = 0x09",
-    "MEKF_CONTROL_PREDICTION_FIXED_US = 2500UL", "MEKF_CONTROL_PREDICTION_MAX_US = 10000UL",
-    "v46l_fast_solver_shadow_20260914"):
+    "MEKF_CONTROL_PREDICTION_FIXED_US = 2500UL", "MEKF_CONTROL_PREDICTION_MAX_US = 10000UL"):
     assert token in config, token
+assert (
+    "v46l_fast_solver_shadow_20260914" in config or
+    "v46r_fast_solver_control_20260915" in config
+), "supported V46l/V46r controller identity"
 for token in ("M5.Imu.getType() != m5::imu_bmi270", "getImuInstancePtr(0)", "sensor_mask_accel",
               "sensor_mask_gyro", "accel_sequence", "gyro_sequence"):
     assert token in imu_cpp or token in imu_h, token
@@ -26,11 +29,11 @@ assert "raw_mekf_predicted_abs_deg_" in runner
 assert "status_.pitch_mekf_deg = raw_mekf_predicted_abs_deg_ - offset_mekf_pitch_deg_" in runner
 assert "status_.pitch_mekf_abs_deg = raw_mekf_pitch_abs_deg_" in runner
 assert "r.accel_sequence != g_v46_mekf_run_reinit.last_accel_sequence" in runner
-print("V46l high-rate / forward-prediction source guards passed")
+print("V46l/V46r high-rate / forward-prediction source guards passed")
 
 web = Path("src/web_ui.cpp").read_text(encoding="utf-8")
 assert "if(refreshInFlight)return;" in web
-# V46o: a bounded, fixed-size heartbeat replaces the 41-second blind pause.
+# V46o+: a bounded, fixed-size heartbeat replaces the 41-second blind pause.
 assert "setInterval(refresh,1000)" in web
 status_region = web[web.index("void WebUi::handleStatus()"):web.index("void WebUi::handleStartPassive()")]
 assert "char body[192]" in status_region
