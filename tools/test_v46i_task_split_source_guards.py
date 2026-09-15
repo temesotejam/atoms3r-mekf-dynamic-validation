@@ -8,7 +8,8 @@ runner = Path('src/experiment_runner.cpp').read_text(encoding='utf-8')
 web = Path('src/web_ui.cpp').read_text(encoding='utf-8')
 manifest = Path('site/manifest.json').read_text(encoding='utf-8')
 
-assert 'v46l_fast_solver_shadow_20260914' in config
+assert ('v46l_fast_solver_shadow_20260914' in config or
+        'v46r_fast_solver_control_20260915' in config)
 assert 'ROLLER_IO_TASK_CORE = 0' in config
 assert 'ROLLER_IO_TASK_PRIORITY = 4' in config
 assert 'ROLLER_IO_TASK_STACK_BYTES = 6144UL' in config
@@ -52,9 +53,10 @@ assert 'roller_io_task_init_failed' in web
 assert 'roller_io_init_attempt_count' in web
 assert 'roller_io_recovery_count' in web
 assert 'roller_command_latency_max_us' in web
-assert 'AtomS3R V46q MEKF Motor Validation' in manifest
-assert '"version": "0.46.16"' in manifest
-print('V46l dual-core Roller READY guards passed')
+assert ('AtomS3R V46q MEKF Motor Validation' in manifest or
+        'AtomS3R V46r Fast Solver Motor Validation' in manifest)
+assert ('"version": "0.46.16"' in manifest or '"version": "0.46.17"' in manifest)
+print('V46l/V46r dual-core Roller READY guards passed')
 
 # Initialization/recovery must be self-healing, not one-shot.
 assert 'for (;;)' in roller_cpp
