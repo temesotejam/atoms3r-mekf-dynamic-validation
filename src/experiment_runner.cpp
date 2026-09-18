@@ -451,6 +451,9 @@ void ExperimentRunner::updateDisplayedAngles(const ImuReading&) {
   }
   status_.pitch_gyro_raw_deg = gyro_raw_deg_;
   status_.pitch_gyro_bias_corrected_deg = gyro_bias_corrected_deg_;
+  // V46z comparison-zero begin
+  updateMekfComparisonRelativeAngles();
+  // V46z comparison-zero end
 }
 
 void ExperimentRunner::updateCurrentRollState(const ImuReading& r, uint32_t now_ms) {
@@ -1069,6 +1072,15 @@ void ExperimentRunner::recordV59StateGateEvent(uint32_t crossing_ms, float hprev
 }
 
 void ExperimentRunner::beginStartSync(uint32_t now_ms) {
+  // V46z comparison-zero begin
+  captureMekfComparisonZero(status_.mekf_start_sync_zero_abs_deg,
+                            status_.mekf_start_sync_zero_sample_us);
+  status_.mekf_measurement_zero_abs_deg = NAN;
+  status_.mekf_trial_zero_abs_deg = NAN;
+  status_.mekf_measurement_zero_sample_us = 0;
+  status_.mekf_trial_zero_sample_us = 0;
+  updateMekfComparisonRelativeAngles();
+  // V46z comparison-zero end
   run_start_us_ = micros();
   logger_->startRun(status_.run_id, run_start_us_, status_.current_mA_setting, status_.pulse_width_ms_setting,
                     status_.input_interval_ms, identification_mode_,
@@ -1091,6 +1103,20 @@ void ExperimentRunner::beginMeasurementRun() {
     captureAngleOffsets();
     updateDisplayedAngles(imu_->reading());
   }
+  // V46z comparison-zero begin
+  captureMekfComparisonZero(status_.mekf_measurement_zero_abs_deg,
+                            status_.mekf_measurement_zero_sample_us);
+  const bool dedicated_single_trial =
+      passive_capture_mode_ || q_ident_mode_ || energy_control_v0_mode_ || energy_control_autonomous_mode_;
+  if (dedicated_single_trial) {
+    status_.mekf_trial_zero_abs_deg = status_.mekf_measurement_zero_abs_deg;
+    status_.mekf_trial_zero_sample_us = status_.mekf_measurement_zero_sample_us;
+  } else {
+    status_.mekf_trial_zero_abs_deg = NAN;
+    status_.mekf_trial_zero_sample_us = 0;
+  }
+  updateMekfComparisonRelativeAngles();
+  // V46z comparison-zero end
   run_start_ms_ = millis();
   if (passive_capture_mode_ || q_ident_mode_ || energy_control_v0_mode_ || energy_control_autonomous_mode_) resetQ1ShadowZeroCrossTracker();
   if (energy_control_v0_mode_) resetEnergyControlV0OutputGate();
@@ -1208,6 +1234,10 @@ void ExperimentRunner::beginTrial(uint8_t trial_index) {
   status_.pulse_active = false;
   status_.pulse_direction = 0;
   captureAngleOffsets();
+  // V46z comparison-zero begin
+  captureMekfComparisonZero(status_.mekf_trial_zero_abs_deg,
+                            status_.mekf_trial_zero_sample_us);
+  // V46z comparison-zero end
   updateDisplayedAngles(imu_->reading());
   status_.sync_event_id = 6;
   logSampleNow();
@@ -3154,6 +3184,25 @@ void ExperimentRunner::captureAngleOffsets() {
   gyro_raw_deg_ = 0.0f;
   gyro_bias_corrected_deg_ = 0.0f;
 }
+
+// V46z comparison-zero begin
+void ExperimentRunner::captureMekfComparisonZero(float& zero_abs_deg, uint32_t& zero_sample_us) {
+  zero_abs_deg = raw_mekf_pitch_abs_deg_;
+  zero_sample_us = imu_ ? imu_->reading().last_gyro_update_us : 0;
+}
+
+void ExperimentRunner::updateMekfComparisonRelativeAngles() {
+  status_.pitch_mekf_start_sync_relative_deg =
+      isfinite(status_.mekf_start_sync_zero_abs_deg)
+          ? raw_mekf_pitch_abs_deg_ - status_.mekf_start_sync_zero_abs_deg : NAN;
+  status_.pitch_mekf_measurement_relative_deg =
+      isfinite(status_.mekf_measurement_zero_abs_deg)
+          ? raw_mekf_pitch_abs_deg_ - status_.mekf_measurement_zero_abs_deg : NAN;
+  status_.pitch_mekf_trial_relative_deg =
+      isfinite(status_.mekf_trial_zero_abs_deg)
+          ? raw_mekf_pitch_abs_deg_ - status_.mekf_trial_zero_abs_deg : NAN;
+}
+// V46z comparison-zero end
 
 void ExperimentRunner::requestEmergencyStop(const char* reason) {
   setSyncLed(false);
