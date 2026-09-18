@@ -58,8 +58,24 @@ assert "mekf_trial_zero_abs_deg" in trial
 display = runner[runner.index("void ExperimentRunner::updateDisplayedAngles"):
                  runner.index("void ExperimentRunner::updateCurrentRollState")]
 assert "status_.pitch_mekf_deg = raw_mekf_predicted_abs_deg_ - offset_mekf_pitch_deg_" in display
-control = runner[runner.index("void ExperimentRunner::updateEnergyControlAutonomousMotion"):
-                 runner.index("void ExperimentRunner::resetEnergyControlAutonomous", runner.index("void ExperimentRunner::updateEnergyControlAutonomousMotion"))]
+
+def method(name: str) -> str:
+    start = runner.index(name)
+    brace = runner.index("{", start)
+    depth = 1
+    end = brace + 1
+    while depth:
+        depth += (runner[end] == "{") - (runner[end] == "}")
+        end += 1
+    return runner[start:end]
+
+control = "\n".join(method(name) for name in (
+    "void ExperimentRunner::updateEnergyControlAutonomousMotion",
+    "void ExperimentRunner::updateEnergyControlAutonomousPeakTracker",
+    "void ExperimentRunner::updateEnergyControlAutonomousAtZeroCross",
+    "bool ExperimentRunner::beginEnergyControlAutonomousPulse",
+    "bool ExperimentRunner::beginEnergyControlAutonomousStartKickPulse",
+))
 for token in ("pitch_mekf_start_sync_relative_deg", "pitch_mekf_measurement_relative_deg",
               "pitch_mekf_trial_relative_deg"):
     assert token not in control, token
