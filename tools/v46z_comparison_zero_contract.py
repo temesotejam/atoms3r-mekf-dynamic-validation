@@ -3,7 +3,7 @@ import re
 
 def normalize_runner(text: str) -> str:
     return re.sub(
-        r"\n  // V46z comparison-zero begin\n.*?\n  // V46z comparison-zero end",
+        r"\n\s*// V46z comparison-zero begin\n.*?\n\s*// V46z comparison-zero end",
         "",
         text,
         flags=re.S,
