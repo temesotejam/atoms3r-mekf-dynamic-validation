@@ -87,6 +87,8 @@ static constexpr uint16_t BMI270_GYRO_ODR_HZ = 400;
 static constexpr uint16_t BMI270_ACCEL_ODR_HZ = 200;
 static constexpr uint8_t BMI270_GYRO_ODR_CODE = 0x0A;
 static constexpr uint8_t BMI270_ACCEL_ODR_CODE = 0x09;
+// V46ab: retained for diagnostic predicted-angle logging and legacy non-Autonomous
+// modes only. Autonomous peak/zero-cross timing uses posterior measurement-relative MEKF.
 static constexpr uint32_t MEKF_CONTROL_PREDICTION_FIXED_US = 2500UL;
 static constexpr uint32_t MEKF_CONTROL_PREDICTION_MAX_US = 10000UL;
 static constexpr uint8_t ROLLER_IO_TASK_CORE = 0;
