@@ -12,6 +12,7 @@ import zipfile
 from pathlib import Path
 from convert_rwlog_to_csv import parse_header, verify_crc
 from v46t_current_observation_contract import normalize_current_observation
+from v46u_timing_contract import original_timing_file
 
 ROOT = Path(__file__).resolve().parents[1]
 FLOAT_FIELDS = 'i0_mA free_peak_deg target_peak_deg target_energy_j passive_energy_j q_available_mA_s integral_mA_s signed_target_current_mA tau_s base_gain correction_c correction_gain correction_limit ff_q_mA_s selected_q_mA_s corrected_target_energy_j'.split()
@@ -38,7 +39,7 @@ def build_driver(directory):
     baseline = json.loads((ROOT / 'tools/v46s_audit_baseline.json').read_text())
     if hashlib.sha256(text.encode()).hexdigest() != baseline['runner_sha256']:
         raise ValueError('controller changed: update the versioned replay model before using this tool')
-    config = (ROOT / 'src/config.h').read_text().replace('v46v_deadline_tightening_20260918', 'v46u_timing_reader_20260915').replace('v46u_timing_reader_20260915', 'v46t_current_observation_20260915').replace('v46t_current_observation_20260915', 'v46s_solver_audit_20260915').replace('v46s_solver_audit_20260915', 'v46r_fast_solver_control_20260915')
+    config = original_timing_file('src/config.h').decode().replace('v46t_current_observation_20260915', 'v46s_solver_audit_20260915').replace('v46s_solver_audit_20260915', 'v46r_fast_solver_control_20260915')
     if hashlib.sha256(config.encode()).hexdigest() != baseline['config_sha256']:
         raise ValueError('configuration changed: replay model requires review')
     control = text[text.index('void ExperimentRunner::updateEnergyControlAutonomousAtZeroCross'):]
