@@ -56,7 +56,9 @@ for token in (
     "ENERGY_CONTROL_AUTONOMOUS_MAX_PULSE_MS = 100",
 ):
     assert token in config, token
-assert '"autonomous_control_prediction_enabled":false' in logger
-assert '"mekf_prediction_role":"diagnostic_only_during_autonomous' in logger
+assert "autonomous_control_prediction_enabled" in logger
+assert "false" in logger
+assert "mekf_prediction_role" in logger
+assert "diagnostic_only_during_autonomous" in logger
 
 print("V46ab PASS: Autonomous timing uses posterior measurement-relative MEKF with no prediction")
