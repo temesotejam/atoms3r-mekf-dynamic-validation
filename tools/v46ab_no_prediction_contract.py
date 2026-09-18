@@ -17,7 +17,13 @@ def normalize_runner(text: str) -> str:
     )
 
 def normalize_config(text: str) -> str:
-    return text.replace(
+    text = text.replace(
         "v46ab_no_control_prediction_20260918",
         "v46aa_control_upright_zero_20260918",
     )
+    text = text.replace(
+        "// V46ab: retained for diagnostic predicted-angle logging and legacy non-Autonomous\n"
+        "// modes only. Autonomous peak/zero-cross timing uses posterior measurement-relative MEKF.\n",
+        "",
+    )
+    return text
