@@ -34,7 +34,7 @@ Definition:
 
 `pitch_mekf_start_sync_relative_deg = pitch_mekf_abs_deg - mekf_start_sync_zero_abs_deg`
 
-Use this only when comparing motion that includes the START synchronization period.
+Use this only when inspecting the START synchronization period. In Autonomous Energy Control, the existing MEKF upright reinitialization occurs during the first START_SYNC OFF segment; therefore this coordinate can contain that intentional estimator-frame jump. It is **not** the default dynamic video-comparison coordinate.
 
 ### Measurement start
 
