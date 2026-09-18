@@ -209,13 +209,15 @@ void Roller485Manager::ioTaskLoop() {
 void Roller485Manager::update() {
   const uint32_t now_us = micros();
 
-  // V46i keeps the full 2 ms current audit, but it now runs only on Core 0.
+  // V46v: try the observational current audit every 1 ms while a pulse is active.
+  // This does not alter pulse timing or current command; it only reduces sample-age slack.
+  bool current_already_fresh = false;
   if (command_mA_ != 0 &&
       (last_fast_current_due_us_ == 0 ||
        static_cast<uint32_t>(now_us - last_fast_current_due_us_) >=
            Config::CURRENT_AUDIT_FAST_READ_PERIOD_US)) {
     last_fast_current_due_us_ = now_us;
-    readCurrentFresh(true);
+    current_already_fresh = readCurrentFresh(true);
   }
 
   const uint32_t period_us = Config::ROLLER_READ_PERIOD_MS * 1000UL;
@@ -228,7 +230,9 @@ void Roller485Manager::update() {
   uint8_t status = 0;
   uint8_t error = 0;
 
-  bool ok = readCurrentFresh(command_mA_ != 0);
+  // If the fast audit already obtained a valid current in this same loop,
+  // reuse it instead of immediately reading CURRENT_READBACK a second time.
+  bool ok = current_already_fresh || readCurrentFresh(command_mA_ != 0);
   ok &= readI32(REG_VIN, vin_raw);
   ok &= readU8(REG_MODE, mode);
   ok &= readU8(REG_OUTPUT, output);
