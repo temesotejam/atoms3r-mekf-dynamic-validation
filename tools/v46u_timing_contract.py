@@ -1,15 +1,21 @@
 """Strict inverse of reviewed timing-only changes for retained baseline tests."""
 from pathlib import Path
 import json
-from v46z_comparison_zero_contract import normalize_log_types
+from v46aa_control_zero_contract import normalize_log_types as normalize_v46aa_log_types
+from v46z_comparison_zero_contract import normalize_log_types as normalize_v46z_log_types
 ROOT=Path(__file__).resolve().parents[1]
 def original_timing_file(path):
     data=(ROOT/path).read_text()
-    # V46z changes comparison-zero observability only. Reverse its identity first.
+    # V46aa makes the timing detector reference explicit without changing its
+    # algebraic value. Reverse its identity/log extension first.
+    if path == 'src/config.h':
+        data=data.replace('v46aa_control_upright_zero_20260918','v46z_event_relative_angle_zero_20260918')
+    if path == 'src/log_types.h':
+        data=normalize_v46aa_log_types(data)
+        data=normalize_v46z_log_types(data)
+    # V46z changes comparison-zero observability only. Reverse its identity next.
     if path == 'src/config.h':
         data=data.replace('v46z_event_relative_angle_zero_20260918','v46y_frozen_imu_1ms_20260918')
-    if path == 'src/log_types.h':
-        data=normalize_log_types(data)
     # V46y freezes the selected 1 ms polling specification. Reverse it to the
     # V46x comparison point first, then unwind the earlier timing-only releases.
     if path == 'src/config.h':

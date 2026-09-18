@@ -349,6 +349,9 @@ String WebUi::statusJson() const {
   json += ",\"pitch_mekf_control_deg\":" + String(st.pitch_mekf_deg, 3);
   json += ",\"pitch_mekf_abs_deg\":" + String(st.pitch_mekf_abs_deg, 3);
   json += ",\"pitch_mekf_predicted_abs_deg\":" + String(st.pitch_mekf_predicted_abs_deg, 3);
+  json += ",\"pitch_mekf_detector_relative_deg\":" + String(st.pitch_mekf_detector_relative_deg, 3);
+  json += ",\"mekf_detector_zero_predicted_abs_deg\":" + String(st.mekf_detector_zero_predicted_abs_deg, 3);
+  json += ",\"mekf_detector_zero_sample_us\":" + String(st.mekf_detector_zero_sample_us);
   json += ",\"mekf_prediction_horizon_us\":" + String(st.mekf_prediction_horizon_us);
   json += ",\"pitch_madgwick_dynamic_abs_deg\":" + String(st.pitch_madgwick_dynamic_abs_deg, 3);
   json += ",\"mekf_accel_confidence\":" + String(st.mekf_accel_confidence, 4);

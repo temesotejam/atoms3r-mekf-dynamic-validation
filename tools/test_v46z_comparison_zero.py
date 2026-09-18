@@ -14,7 +14,7 @@ runner = (SRC / "experiment_runner.cpp").read_text(encoding="utf-8")
 log_types = (SRC / "log_types.h").read_text(encoding="utf-8")
 logger = (SRC / "psram_logger.cpp").read_text(encoding="utf-8")
 
-assert "v46z_event_relative_angle_zero_20260918" in config
+assert "v46aa_control_upright_zero_20260918" in config
 assert "IMU_POLL_PERIOD_US = 1000UL" in config
 assert "BMI270_GYRO_ODR_HZ = 400" in config
 assert "BMI270_ACCEL_ODR_HZ = 200" in config
@@ -80,11 +80,11 @@ for token in ("pitch_mekf_start_sync_relative_deg", "pitch_mekf_measurement_rela
               "pitch_mekf_trial_relative_deg"):
     assert token not in control, token
 
-assert "RWLOG_FORMAT_VERSION = 47" in logger
-assert "sizeof(LogSample) == 250" in log_types
+assert "RWLOG_FORMAT_VERSION = 48" in logger
+assert "sizeof(LogSample) == 258" in log_types
 assert struct.calcsize(converter.SAMPLE_FORMAT_V47) == 250
 # The converter has derived/display CSV columns, so binary field count is not
 # required to equal CSV column count. The synthetic v47 fixture above exercises
 # the actual unpack -> conversion -> CSV path.
 assert len(converter.CSV_COLUMNS_V47) == len(converter.CSV_COLUMNS_V46) + 9
-print("V46z comparison-zero guards PASS: posterior-only references, control unchanged, RWLOG v47 consistent")
+print("V46aa comparison-zero guards PASS: posterior-only references, control unchanged, RWLOG v47 consistent")

@@ -155,8 +155,13 @@ struct LogSample {
   uint32_t mekf_measurement_zero_sample_us;
   uint32_t mekf_trial_zero_sample_us;
   // RWLOG v47 end
+  // RWLOG v48: explicit predicted-MEKF control-zero coordinate.
+  int16_t pitch_mekf_detector_relative_cdeg;
+  int16_t mekf_detector_zero_predicted_abs_cdeg;
+  uint32_t mekf_detector_zero_sample_us;
+  // RWLOG v48 end
 };
 #pragma pack(pop)
 
 static_assert(sizeof(RwLogFileHeader) == 110, "RwLogFileHeader binary size changed");
-static_assert(sizeof(LogSample) == 250, "LogSample binary size changed");
+static_assert(sizeof(LogSample) == 258, "LogSample binary size changed");
