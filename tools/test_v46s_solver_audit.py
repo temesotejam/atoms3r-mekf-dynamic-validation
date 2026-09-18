@@ -17,7 +17,7 @@ def run(cmd,**kw):
 def main():
     baseline=json.loads((ROOT/'tools/v46s_audit_baseline.json').read_text())
     assert hashlib.sha256(original_runner().encode()).hexdigest()==baseline['runner_sha256']
-    cfg=(ROOT/'src/config.h').read_text().replace('v46u_timing_reader_20260915', 'v46t_current_observation_20260915').replace('v46t_current_observation_20260915', 'v46s_solver_audit_20260915').replace('v46s_solver_audit_20260915','v46r_fast_solver_control_20260915')
+    cfg=(ROOT/'src/config.h').read_text().replace('v46v_deadline_tightening_20260918', 'v46u_timing_reader_20260915').replace('v46u_timing_reader_20260915', 'v46t_current_observation_20260915').replace('v46t_current_observation_20260915', 'v46s_solver_audit_20260915').replace('v46s_solver_audit_20260915','v46r_fast_solver_control_20260915')
     assert hashlib.sha256(cfg.encode()).hexdigest()==baseline['config_sha256']
     for path,digest in baseline['protected'].items():
         assert hashlib.sha256(original_timing_file(path)).hexdigest()==digest,path
