@@ -9,7 +9,9 @@ import convert_rwlog_to_csv as converter
 
 
 def write_fixture(path: Path, version: int) -> None:
-    if version == 47:
+    if version == 48:
+        sample_format = converter.SAMPLE_FORMAT_V48
+    elif version == 47:
         sample_format = converter.SAMPLE_FORMAT_V47
     elif version == 46:
         sample_format = converter.SAMPLE_FORMAT_V46
@@ -30,6 +32,9 @@ def write_fixture(path: Path, version: int) -> None:
     if version >= 47:
         values[107:113] = [100, 200, 300, 1100, 1200, 1300]
         values[113:116] = [111111, 222222, 333333]
+    if version >= 48:
+        values[116:118] = [450, 1450]
+        values[118] = 444444
     sample = struct.pack(sample_format, *values)
     metadata = b"{}"
     header_size = struct.calcsize(converter.HEADER_FORMAT)
@@ -83,6 +88,10 @@ def check(version: int) -> None:
                 assert row["mekf_start_sync_zero_sample_us"] == "111111"
                 assert row["mekf_measurement_zero_sample_us"] == "222222"
                 assert row["mekf_trial_zero_sample_us"] == "333333"
+                if version >= 48:
+                    assert row["pitch_mekf_detector_relative_deg"] == "4.500"
+                    assert row["mekf_detector_zero_predicted_abs_deg"] == "14.500"
+                    assert row["mekf_detector_zero_sample_us"] == "444444"
         else:
             assert "pitch_mekf_control_deg" not in row
 
@@ -92,4 +101,5 @@ if __name__ == "__main__":
     check(45)
     check(46)
     check(47)
-    print("RWLOG v44/v45/v46 compatibility and v47 comparison-zero CRC/conversion checks passed")
+    check(48)
+    print("RWLOG v44-v47 compatibility and v48 explicit-control-zero CRC/conversion checks passed")
