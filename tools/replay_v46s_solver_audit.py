@@ -13,6 +13,7 @@ from pathlib import Path
 from convert_rwlog_to_csv import parse_header, verify_crc
 from v46t_current_observation_contract import normalize_current_observation
 from v46u_timing_contract import original_timing_file
+from v46ab_no_prediction_contract import normalize_runner as normalize_v46ab_runner
 from v46aa_control_zero_contract import normalize_runner as normalize_v46aa_runner
 from v46z_comparison_zero_contract import normalize_runner as normalize_v46z_runner
 
@@ -21,6 +22,7 @@ FLOAT_FIELDS = 'i0_mA free_peak_deg target_peak_deg target_energy_j passive_ener
 
 def original_runner():
     text = normalize_current_observation((ROOT / 'src/experiment_runner.cpp').read_text())
+    text = normalize_v46ab_runner(text)
     text = normalize_v46aa_runner(text)
     text = normalize_v46z_runner(text)
     return re.sub(r'\n  // V46s audit begin\n.*?\n  // V46s audit end', '', text, flags=re.S)
