@@ -9,7 +9,7 @@ def main():
     baseline=json.loads((ROOT/'tools/v46s_audit_baseline.json').read_text())
     for p,h in baseline['protected'].items():
         assert hashlib.sha256(original_timing_file(p)).hexdigest()==h,p
-    for token in ['BMI270_GYRO_ODR_HZ = 400','BMI270_ACCEL_ODR_HZ = 200','IMU_POLL_PERIOD_US = 500UL','CURRENT_AUDIT_FAST_READ_PERIOD_US = 1000UL','BMI270_I2C_HZ = 1000000UL']:
+    for token in ['BMI270_GYRO_ODR_HZ = 400','BMI270_ACCEL_ODR_HZ = 200','IMU_POLL_PERIOD_US = 1000UL','CURRENT_AUDIT_FAST_READ_PERIOD_US = 1000UL','BMI270_I2C_HZ = 1000000UL']:
         assert token in (ROOT/'src/config.h').read_text(),token
     imu=(ROOT/'src/imu_manager.cpp').read_text(); roller=(ROOT/'src/roller485_manager.cpp').read_text()
     assert 'M5.Imu.setClock(Config::BMI270_I2C_HZ);' in imu
@@ -53,5 +53,5 @@ int main(){
         assert not assess(bad)['imu_control_observed_pass']
     bad=copy.deepcopy(m);bad['v46n_imu_acquisition']['fault']=True
     assert not assess(bad)['imu_control_observed_pass']
-    print('PASS: unchanged controller/estimators/ODR/safety; V46x 1MHz IMU + 1ms current audit guards; real deadline counters')
+    print('PASS: unchanged controller/estimators/ODR/safety; V46y 1MHz IMU + 1ms current audit guards; real deadline counters')
 if __name__=='__main__':main()
