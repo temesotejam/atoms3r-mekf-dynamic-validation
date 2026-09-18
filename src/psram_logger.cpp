@@ -11,7 +11,7 @@ extern Roller485Manager roller;
 
 #include "config.h"
 
-static constexpr uint16_t RWLOG_FORMAT_VERSION = 46;
+static constexpr uint16_t RWLOG_FORMAT_VERSION = 47;
 static constexpr uint32_t RWLOG_FLAG_CRC32 = 1U << 0;
 static constexpr size_t STREAM_CHUNK_BYTES = 4096;
 
@@ -513,7 +513,9 @@ String PsramLogger::buildMetadataJson() const {
   json += "\"energy_control_v0_event_overflow\":" + String(energy_control_v0_event_overflow_ ? "true" : "false") + ",";
   json += "\"e2_shadow_enabled\":false,";
   json += "\"e2_shadow_role\":\"offline_diagnostic_only;not_called_by_Q1_or_its_validity_logic\",";
-  json += "\"angle_reference_policy\":\"imu_gravity_frame_continuous_without_per_run_zero_subtraction;video_must_use_body_line_minus_fixed_horizon\",";
+  json += "\"angle_reference_policy\":\"MEKF_absolute_remains_continuous;comparison_only_relative_angles_are_zeroed_at_start_sync_measurement_and_trial_boundaries;control_angle_semantics_unchanged\",";
+  json += "\"comparison_zero_source\":\"posterior_pitch_mekf_abs_deg_snapshot_only;does_not_reset_MEKF_quaternion_bias_or_covariance\",";
+  json += "\"comparison_zero_sample_time_semantics\":\"last_consumed_gyro_host_acquisition_timestamp_us_at_reference_capture\",";
   json += "\"attitude_filter_adopted\":\"MEKF_6state_error_state\",";
   json += "\"attitude_filter_compare\":\"online_dynamic_beta_madgwick_hold073_only_for_post_run_comparison\",";
   json += "\"mekf_coordinate_mapping\":\"Ry180_body_frame:accel=(-ax,+ay,-az);gyro=(-gx,+gy_scaled,-gz);reported_pitch=physical_video_sign\",";
@@ -1594,7 +1596,10 @@ String PsramLogger::buildMetadataJson() const {
   json += "\"mekf_q_w\",\"mekf_q_x\",\"mekf_q_y\",\"mekf_q_z\",";
   json += "\"mekf_bias_x_dps\",\"mekf_bias_y_dps\",\"mekf_bias_z_dps\",";
   json += "\"mekf_accel_confidence\",\"mekf_accel_residual_deg\",\"mekf_accel_mag_error_g\",";
-  json += "\"imu_update_dt_us\",\"imu_sample_age_us\",\"mekf_accel_used\",\"attitude_filter_adopted\"]}";
+  json += "\"imu_update_dt_us\",\"imu_sample_age_us\",\"mekf_accel_used\",\"attitude_filter_adopted\",";
+  json += "\"pitch_mekf_start_sync_relative_deg\",\"pitch_mekf_measurement_relative_deg\",\"pitch_mekf_trial_relative_deg\",";
+  json += "\"mekf_start_sync_zero_abs_deg\",\"mekf_measurement_zero_abs_deg\",\"mekf_trial_zero_abs_deg\",";
+  json += "\"mekf_start_sync_zero_sample_us\",\"mekf_measurement_zero_sample_us\",\"mekf_trial_zero_sample_us\"]}";
   const String final_size_key = ",\"metadata_json_final_bytes\":";
   size_t final_size = json.length() + final_size_key.length() + 2U;
   for (uint8_t i = 0; i < 4; ++i) {
