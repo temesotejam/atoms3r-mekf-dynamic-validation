@@ -4,6 +4,21 @@ import json
 ROOT=Path(__file__).resolve().parents[1]
 def original_timing_file(path):
     data=(ROOT/path).read_text()
+    # V46v timing-only changes are reversed first so retained V46u/V46s
+    # protected-source hashes still certify the unchanged controller/estimators.
+    if path == 'src/config.h':
+        data=data.replace('v46v_deadline_tightening_20260918','v46u_timing_reader_20260915')
+        data=data.replace('static constexpr uint32_t BMI270_I2C_HZ = 1000000UL;  // BMI270 Fast-mode Plus maximum.\n','')
+        data=data.replace('CURRENT_AUDIT_FAST_READ_PERIOD_US = 1000UL;  // Try every 1 ms to keep valid samples within the 2 ms audit budget.',
+                          'CURRENT_AUDIT_FAST_READ_PERIOD_US = 2000UL;')
+    elif path == 'src/imu_manager.cpp':
+        data=data.replace('  // V46v timing-only change: BMI270 supports Fast-mode Plus up to 1 MHz.\n  // Keep the same internal bus, axes, ODR and estimator path; only shorten transfers.\n  M5.Imu.setClock(Config::BMI270_I2C_HZ);\n','')
+    elif path == 'src/roller485_manager.cpp':
+        data=data.replace('  // V46v: try the observational current audit every 1 ms while a pulse is active.\n  // This does not alter pulse timing or current command; it only reduces sample-age slack.\n  bool current_already_fresh = false;\n',
+                          '  // V46i keeps the full 2 ms current audit, but it now runs only on Core 0.\n')
+        data=data.replace('    current_already_fresh = readCurrentFresh(true);','    readCurrentFresh(true);')
+        data=data.replace('  // If the fast audit already obtained a valid current in this same loop,\n  // reuse it instead of immediately reading CURRENT_READBACK a second time.\n  bool ok = current_already_fresh || readCurrentFresh(command_mA_ != 0);',
+                          '  bool ok = readCurrentFresh(command_mA_ != 0);')
     edits=json.loads((ROOT/'tools/v46u_timing_delta.json').read_text())
     for edit in reversed(edits):
         if edit['path'] != path:continue

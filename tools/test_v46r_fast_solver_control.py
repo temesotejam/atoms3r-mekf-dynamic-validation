@@ -10,10 +10,10 @@ main = (R / 'src/main.cpp').read_text(encoding='utf-8')
 manifest = json.loads((R / 'site/manifest.json').read_text(encoding='utf-8'))
 site = (R / 'site/index.html').read_text(encoding='utf-8')
 
-assert 'v46u_timing_reader_20260915' in config
-assert manifest['version'] == '0.46.20'
-assert 'V46u' in manifest['name']
-assert 'V46u / 0.46.20' in site
+assert 'v46v_deadline_tightening_20260918' in config
+assert manifest['version'] == '0.46.21'
+assert 'V46v' in manifest['name']
+assert 'V46v / 0.46.21' in site
 
 # Physical output envelope and safety limits remain unchanged.
 for token in (
@@ -21,7 +21,7 @@ for token in (
     'ENERGY_CONTROL_AUTONOMOUS_MAX_PULSE_MS = 100',
     'ENERGY_CONTROL_AUTONOMOUS_START_KICK_CURRENT_MA = 300',
     'ENERGY_CONTROL_AUTONOMOUS_START_KICK_PULSE_MS = 100',
-    'CURRENT_AUDIT_FAST_READ_PERIOD_US = 2000UL',
+    'CURRENT_AUDIT_FAST_READ_PERIOD_US = 1000UL',
     'CURRENT_AUDIT_LOG_PERIOD_US = 2000UL',
 ):
     assert token in config, token
@@ -32,7 +32,7 @@ start = runner.index('void ExperimentRunner::updateEnergyControlAutonomousAtZero
 end = runner.index('void ExperimentRunner::runEnergyControlAutonomousSolverShadow', start)
 control = runner[start:end]
 
-# V46u physical selector uses the bounded fast search, not the 0..100 exhaustive scans.
+# V46v physical selector uses the bounded fast search, not the 0..100 exhaustive scans.
 for token in ('struct FastCandidate', 'evaluate_width', 'fast_pick_width',
               'while (hi > lo', 'const FastCandidate ff', 'const FastCandidate selected_fast'):
     assert token in control, token
@@ -74,4 +74,4 @@ pulse = runner[runner.index('void ExperimentRunner::updateEnergyControlAutonomou
 assert 'stopActivePulse(now_ms);' in pulse
 assert 'runEnergyControlAutonomousSolverShadow();' not in pulse
 
-print('V46u fast physical selector + legacy zero-output semantics + unchanged safety guards PASS')
+print('V46v fast physical selector + legacy zero-output semantics + unchanged safety guards PASS')
