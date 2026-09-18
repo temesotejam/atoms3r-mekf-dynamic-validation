@@ -5751,6 +5751,17 @@ void ExperimentRunner::logSampleNow() {
       ? static_cast<uint32_t>(now_us - status_.imu_last_update_us) : 0xFFFFFFFFUL;
   row.mekf_accel_used = status_.mekf_accel_used ? 1 : 0;
   row.attitude_filter_adopted = 1;
+  // V46z comparison-zero begin
+  row.pitch_mekf_start_sync_relative_cdeg = centi(status_.pitch_mekf_start_sync_relative_deg);
+  row.pitch_mekf_measurement_relative_cdeg = centi(status_.pitch_mekf_measurement_relative_deg);
+  row.pitch_mekf_trial_relative_cdeg = centi(status_.pitch_mekf_trial_relative_deg);
+  row.mekf_start_sync_zero_abs_cdeg = centi(status_.mekf_start_sync_zero_abs_deg);
+  row.mekf_measurement_zero_abs_cdeg = centi(status_.mekf_measurement_zero_abs_deg);
+  row.mekf_trial_zero_abs_cdeg = centi(status_.mekf_trial_zero_abs_deg);
+  row.mekf_start_sync_zero_sample_us = status_.mekf_start_sync_zero_sample_us;
+  row.mekf_measurement_zero_sample_us = status_.mekf_measurement_zero_sample_us;
+  row.mekf_trial_zero_sample_us = status_.mekf_trial_zero_sample_us;
+  // V46z comparison-zero end
   row.led_state = status_.led_state ? 1 : 0;
   row.sync_event_id = status_.sync_event_id;
   row.log_active =
