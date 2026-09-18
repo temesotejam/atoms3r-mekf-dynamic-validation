@@ -4,39 +4,40 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#111827">
-  <title>AtomS3R V46ab Fast Solver Motor Validation</title>
+  <title>AtomS3R V46ac Fast Solver Motor Validation</title>
   <link rel="stylesheet" href="styles.css">
   <script type="module" src="https://unpkg.com/esp-web-tools@10.1.1/dist/web/install-button.js?module"></script>
 </head>
 <body>
   <main class="shell">
     <header class="hero">
-      <p class="eyebrow">ATOMS3R / V46ab / MOTOR-DRIVEN VALIDATION</p>
+      <p class="eyebrow">ATOMS3R / V46ac / MOTOR-DRIVEN VALIDATION</p>
       <h1>MEKF Motor Validation<br><span>Web Flasher</span></h1>
-      <p class="lead">Autonomous Energy Control V7 を実際にモータ駆動しながら、MEKF と dynamic-beta Madgwick を同時記録する V46ab ファームウェアです。AtomS3R内蔵BMI270をGyro 400 Hz / Accel 200 Hzで使用し、MEKFは新しいGyroごとにpredict、新しいAccelが来たときだけ補正します。Autonomousのピーク・ゼロクロス検出は動画比較と同じposterior MEKFの測定開始相対角を使用します。短時間先予測は診断値として記録しますが、Autonomous制御判断には使いません。ゼロクロス直後のパルス幅選択にはV46Lで実機比較した高速solverを使用します。</p>
-      <div class="badges"><span>ESP32-S3</span><span>BMI270 400/200 Hz</span><span>RWLOG v49</span><span>V46ab Fast Solver</span><span>posterior control</span></div>
+      <p class="lead">Autonomous Energy Control V7 を実際にモータ駆動しながら、MEKF と dynamic-beta Madgwick を同時記録する V46ac ファームウェアです。AtomS3R内蔵BMI270をGyro 400 Hz / Accel 200 Hzで使用し、MEKFは新しいGyroごとにpredict、新しいAccelが来たときだけ補正します。Autonomousのピーク・ゼロクロス検出は動画比較用posterior MEKF角を基礎にし、実測した処理＋電流立ち上がり遅延を補うため角速度で3.0 msだけ先行予測します。従来のQuaternion未来予測はAutonomous中は実行しません。ゼロクロス直後のパルス幅選択にはV46Lで実機比較した高速solverを使用します。</p>
+      <div class="badges"><span>ESP32-S3</span><span>BMI270 400/200 Hz</span><span>RWLOG v50</span><span>V46ac Fast Solver</span><span>3 ms delay-compensated control</span></div>
     </header>
 
     <section class="panel important">
-      <h2>V46ab / 0.46.27：Autonomous制御から未来予測を除外</h2>
-      <p>Autonomousのピーク・ゼロクロス検出角を、動画比較と完全に同じ
-      <code>pitch_mekf_measurement_relative_deg</code> に統一しました。
-      定義は <code>posterior_MEKF(t) - posterior_MEKF(measurement_start)</code> で、測定開始時の初期直立姿勢が0°です。</p>
-      <p>Autonomous中は <code>pitch_mekf_control_deg</code> もこの値と同一です。
-      これまでの数ms先MEKF予測は <code>pitch_mekf_predicted_abs_deg</code> と予測horizonとして記録だけ継続し、
-      ピーク判定・中央通過・ゼロクロス・パルス判断には入力しません。</p>
-      <p>エネルギー/振幅座標は従来どおりGyro積分、Fast solver・Q計算・300 mA・最大100 ms・ESTOP条件は変更しません。
-      センサ測定系も Gyro 400 Hz / Accel 200 Hz / 1.0 ms host poll / BMI270 I²C 1 MHz の確定仕様を維持します。</p>
-      <p>RWLOGは意味の変更を識別できるようv49とし、v48とバイナリ配置は同じです。
-      <a href="https://github.com/temesotejam/atoms3r-mekf-dynamic-validation/blob/main/docs/V46AB_NO_CONTROL_PREDICTION.md">制御角と診断用predictionの定義</a></p>
+      <h2>V46ac / 0.46.28：実測遅延だけを補う3 ms軽量予測</h2>
+      <p>動画比較は従来どおり <code>pitch_mekf_measurement_relative_deg</code> を使用し、測定開始時の初期直立姿勢を0°とします。</p>
+      <p>Autonomousのピーク・中央通過・ゼロクロス判定だけ、
+      <code>theta_control = theta_posterior + omega_mekf × 0.003 s</code>
+      として3.0 ms先を軽量予測します。角速度にはbias補正後のY Gyroへ既存のMEKF Gyroスケールを適用した値を使います。</p>
+      <p>今回のc489実測では、ゼロクロス認識から3 mA以上の実電流変化を観測するまで中央値約4.45 msでした。
+      そこで過剰補償を避ける初期値として3.0 msを採用します。</p>
+      <p>従来のQuaternionによる数ms先MEKF再予測はAutonomous中には実行しません。
+      Fast solver、Gyro積分の振幅/エネルギー座標、300 mA、最大100 ms、ESTOP条件、確定済み1 ms IMU取得系は変更しません。</p>
+      <p>RWLOGはv50です。<code>pitch_mekf_measurement_relative_deg</code>が未補償角、
+      <code>pitch_mekf_detector_relative_deg</code>とAutonomous中の<code>pitch_mekf_control_deg</code>が3 ms補償後の角度です。
+      <a href="https://github.com/temesotejam/atoms3r-mekf-dynamic-validation/blob/main/docs/V46AC_LIGHT_DELAY_COMPENSATION.md">補償式と検証方針</a></p>
     </section>
     <section class="panel important">
-      <h2>V46ab / 0.46.27：電流記録の時刻整合を修正</h2>
+      <h2>V46ac / 0.46.28：電流記録の時刻整合を修正</h2>
       <p>電流値・連番・取得時刻を1回のスナップショットから読み、その後に行の参照時刻を採ります。
       別スナップショットの再読出しによる年齢の不整合を除去しました。未取得は従来どおりUINT32_MAXです。
       V46p/V46q/V46sで再現した記録上の問題への修正で、制御判断・MEKF・10 ms停止条件は変更していません。</p>
       <p>角度の積分座標のずれとIMUの取得間隔の揺らぎは別課題です。この版で修正済みとは扱いません。
-      V46abの実機確認は未実施です。<a href="https://github.com/temesotejam/atoms3r-mekf-dynamic-validation/blob/main/docs/V46T_CURRENT_OBSERVATION_FIX.md">4 Run比較と修正範囲</a></p>
+      V46acの実機確認は未実施です。<a href="https://github.com/temesotejam/atoms3r-mekf-dynamic-validation/blob/main/docs/V46T_CURRENT_OBSERVATION_FIX.md">4 Run比較と修正範囲</a></p>
       <p>高速ソルバの判断・出力制限・IMU停止条件はV46rと同じです。追加したのは記録です。
       処理時間、評価回数、入力サンプルの年齢、無入力・計算失敗を含む結果を
       <code>v46s_solver_audit</code> に保存します。旧ソルバは実機上で実行しません。</p>
@@ -58,7 +59,7 @@
     </section>
 
     <section class="panel important">
-      <h2>V46ab / 0.46.27：高速ソルバ実制御 + V46q取得系</h2>
+      <h2>V46ac / 0.46.28：高速ソルバ実制御 + V46q取得系</h2>
       <p>取得版：<code>v46q_lightweight_acquisition_20260914</code>。従来のV7モータ制御、
       ±300 mA・最大100 ms、立位判定、非常停止、2 ms電流監査は維持しています。</p>
       <p>開始応答後に取得連番の境界を1回だけ作り、待機中の古いキューを新しいRunへ持ち込みません。
@@ -87,7 +88,7 @@
       <h2>このページから直接書き込めます</h2>
       <p>AtomS3R を USB でPCへ接続し、Chrome または Edge のデスクトップ版で下のボタンを押してください。</p>
       <esp-web-install-button manifest="manifest.json">
-        <button slot="activate" class="primary">AtomS3RへV46abを書き込む</button>
+        <button slot="activate" class="primary">AtomS3RへV46acを書き込む</button>
         <span slot="unsupported" class="warning">このブラウザはWeb Serial / WebUSBに対応していません。PC版ChromeまたはEdgeを使用してください。</span>
       </esp-web-install-button>
       <details>
