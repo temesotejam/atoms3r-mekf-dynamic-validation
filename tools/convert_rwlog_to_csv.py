@@ -25,6 +25,8 @@ SAMPLE_FORMAT_V42 = SAMPLE_FORMAT_V35 + "h" * 5 + "BB"
 SAMPLE_FORMAT_V45 = SAMPLE_FORMAT_V42 + "IIIIiiiHBB"
 # v46 appends MEKF/control diagnostics while preserving the complete v45 prefix.
 SAMPLE_FORMAT_V46 = SAMPLE_FORMAT_V45 + "h" * 13 + "II" + "BB"
+# v47 appends comparison-only posterior-MEKF zero-reference diagnostics.
+SAMPLE_FORMAT_V47 = SAMPLE_FORMAT_V46 + "h" * 6 + "III"
 HEADER_FIELDS = [
     "magic",
     "format_version",
@@ -254,6 +256,17 @@ CSV_COLUMNS_V46 = CSV_COLUMNS_V45 + [
     "mekf_accel_confidence", "mekf_accel_residual_deg", "mekf_accel_mag_error_g",
     "imu_update_dt_us", "imu_sample_age_us", "mekf_accel_used", "attitude_filter_adopted",
 ]
+CSV_COLUMNS_V47 = CSV_COLUMNS_V46 + [
+    "pitch_mekf_start_sync_relative_deg",
+    "pitch_mekf_measurement_relative_deg",
+    "pitch_mekf_trial_relative_deg",
+    "mekf_start_sync_zero_abs_deg",
+    "mekf_measurement_zero_abs_deg",
+    "mekf_trial_zero_abs_deg",
+    "mekf_start_sync_zero_sample_us",
+    "mekf_measurement_zero_sample_us",
+    "mekf_trial_zero_sample_us",
+]
 CSV_COLUMNS_V33 = CSV_COLUMNS_COMMON_PREFIX + [
     "trial_predicted_beta_min", "beta_recovery_tau_s", "beta_model_vbat_mV", "predicted_i_goal_mA", "predicted_peak_current_mA", "beta_model_vbat_status",
     "beta_ceiling_fixed", "beta_ceiling_dynamic_hold073", "beta_ceiling_dynamic_hold120", "beta_ceiling_dynamic_hold170",
@@ -266,6 +279,8 @@ CSV_COLUMNS_V33 = CSV_COLUMNS_COMMON_PREFIX + [
     "beta_phase_state", "beta_phase_progress", "beta_phase_peak_angle_deg", "beta_phase_angle_deg", "beta_phase_ceiling",
 ]
 def csv_columns_for_version(format_version: int) -> list[str]:
+    if format_version >= 47:
+        return CSV_COLUMNS_V47
     if format_version >= 46:
         return CSV_COLUMNS_V46
     if format_version >= 45:
@@ -294,6 +309,8 @@ def csv_columns_for_version(format_version: int) -> list[str]:
 
 
 def sample_format_for_version(format_version: int) -> str:
+    if format_version >= 47:
+        return SAMPLE_FORMAT_V47
     if format_version >= 46:
         return SAMPLE_FORMAT_V46
     if format_version >= 45:
@@ -660,7 +677,26 @@ def convert_sample_v46(values):
     return row
 
 
+
+def convert_sample_v47(values):
+    row = convert_sample_v46(values[:107])
+    def deg_or_blank(value):
+        return "" if value == -32768 else f"{value / 100.0:.3f}"
+    row["pitch_mekf_start_sync_relative_deg"] = deg_or_blank(values[107])
+    row["pitch_mekf_measurement_relative_deg"] = deg_or_blank(values[108])
+    row["pitch_mekf_trial_relative_deg"] = deg_or_blank(values[109])
+    row["mekf_start_sync_zero_abs_deg"] = deg_or_blank(values[110])
+    row["mekf_measurement_zero_abs_deg"] = deg_or_blank(values[111])
+    row["mekf_trial_zero_abs_deg"] = deg_or_blank(values[112])
+    row["mekf_start_sync_zero_sample_us"] = values[113]
+    row["mekf_measurement_zero_sample_us"] = values[114]
+    row["mekf_trial_zero_sample_us"] = values[115]
+    return row
+
+
 def convert_sample(values, format_version: int):
+    if format_version >= 47:
+        return convert_sample_v47(values)
     if format_version >= 46:
         return convert_sample_v46(values)
     if format_version >= 45:
@@ -945,8 +981,8 @@ def write_energy_control_autonomous_events(metadata: dict, out_dir: Path) -> tup
 def convert(path: Path, out_dir: Path) -> None:
     data = path.read_bytes()
     header = parse_header(data)
-    if header["format_version"] not in (23, 24, 25, 26, 27, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46):
-        raise ValueError(f"this converter expects rwlog format v23-v27, v29-v46, got v{header['format_version']}")
+    if header["format_version"] not in (23, 24, 25, 26, 27, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47):
+        raise ValueError(f"this converter expects rwlog format v23-v27, v29-v47, got v{header['format_version']}")
     sample_format = sample_format_for_version(header["format_version"])
     if header["log_sample_size"] != struct.calcsize(sample_format):
         raise ValueError("unexpected sample size")

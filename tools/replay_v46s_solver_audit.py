@@ -13,12 +13,14 @@ from pathlib import Path
 from convert_rwlog_to_csv import parse_header, verify_crc
 from v46t_current_observation_contract import normalize_current_observation
 from v46u_timing_contract import original_timing_file
+from v46z_comparison_zero_contract import normalize_runner
 
 ROOT = Path(__file__).resolve().parents[1]
 FLOAT_FIELDS = 'i0_mA free_peak_deg target_peak_deg target_energy_j passive_energy_j q_available_mA_s integral_mA_s signed_target_current_mA tau_s base_gain correction_c correction_gain correction_limit ff_q_mA_s selected_q_mA_s corrected_target_energy_j'.split()
 
 def original_runner():
     text = normalize_current_observation((ROOT / 'src/experiment_runner.cpp').read_text())
+    text = normalize_runner(text)
     return re.sub(r'\n  // V46s audit begin\n.*?\n  // V46s audit end', '', text, flags=re.S)
 
 def method(text, name):

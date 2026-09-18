@@ -9,7 +9,9 @@ import convert_rwlog_to_csv as converter
 
 
 def write_fixture(path: Path, version: int) -> None:
-    if version == 46:
+    if version == 47:
+        sample_format = converter.SAMPLE_FORMAT_V47
+    elif version == 46:
         sample_format = converter.SAMPLE_FORMAT_V46
     elif version == 45:
         sample_format = converter.SAMPLE_FORMAT_V45
@@ -25,6 +27,9 @@ def write_fixture(path: Path, version: int) -> None:
     if version >= 46:
         values[90:103] = [1250, 1300, 1275, 9999, 10, -20, 30, 11, -22, 33, 8750, 250, 40]
         values[103:107] = [5000, 321, 1, 1]
+    if version >= 47:
+        values[107:113] = [100, 200, 300, 1100, 1200, 1300]
+        values[113:116] = [111111, 222222, 333333]
     sample = struct.pack(sample_format, *values)
     metadata = b"{}"
     header_size = struct.calcsize(converter.HEADER_FORMAT)
@@ -56,7 +61,7 @@ def check(version: int) -> None:
         assert row["physical_roll_abs_deg"] == "12.340"
         if version >= 45:
             assert row["roller_current_sequence"] == "42"
-        if version == 46:
+        if version >= 46:
             assert row["pitch_mekf_control_deg"] == "12.500"
             assert row["pitch_mekf_abs_deg"] == "13.000"
             assert row["pitch_madgwick_dynamic_abs_deg"] == "12.750"
@@ -68,6 +73,16 @@ def check(version: int) -> None:
             assert row["imu_sample_age_us"] == "321"
             assert row["mekf_accel_used"] == "1"
             assert row["attitude_filter_adopted"] == "1"
+            if version >= 47:
+                assert row["pitch_mekf_start_sync_relative_deg"] == "1.000"
+                assert row["pitch_mekf_measurement_relative_deg"] == "2.000"
+                assert row["pitch_mekf_trial_relative_deg"] == "3.000"
+                assert row["mekf_start_sync_zero_abs_deg"] == "11.000"
+                assert row["mekf_measurement_zero_abs_deg"] == "12.000"
+                assert row["mekf_trial_zero_abs_deg"] == "13.000"
+                assert row["mekf_start_sync_zero_sample_us"] == "111111"
+                assert row["mekf_measurement_zero_sample_us"] == "222222"
+                assert row["mekf_trial_zero_sample_us"] == "333333"
         else:
             assert "pitch_mekf_control_deg" not in row
 
@@ -76,4 +91,5 @@ if __name__ == "__main__":
     check(44)
     check(45)
     check(46)
-    print("RWLOG v44/v45 compatibility and v46 MEKF CRC/conversion checks passed")
+    check(47)
+    print("RWLOG v44/v45/v46 compatibility and v47 comparison-zero CRC/conversion checks passed")
