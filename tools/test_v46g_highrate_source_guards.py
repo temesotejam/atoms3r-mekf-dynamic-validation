@@ -10,13 +10,13 @@ runner = (SRC / "experiment_runner.cpp").read_text(encoding="utf-8")
 mekf_h = (SRC / "mekf6.hpp").read_text(encoding="utf-8")
 mekf_cpp = (SRC / "mekf6.cpp").read_text(encoding="utf-8")
 for token in (
-    "IMU_POLL_PERIOD_US = 500UL", "BMI270_GYRO_ODR_HZ = 400", "BMI270_ACCEL_ODR_HZ = 200",
+    "IMU_POLL_PERIOD_US = 1000UL", "BMI270_GYRO_ODR_HZ = 400", "BMI270_ACCEL_ODR_HZ = 200",
     "BMI270_GYRO_ODR_CODE = 0x0A", "BMI270_ACCEL_ODR_CODE = 0x09",
     "MEKF_CONTROL_PREDICTION_FIXED_US = 2500UL", "MEKF_CONTROL_PREDICTION_MAX_US = 10000UL"):
     assert token in config, token
 assert (
     "v46l_fast_solver_shadow_20260914" in config or
-    "v46x_imu_poll_500us_20260918" in config
+    "v46y_frozen_imu_1ms_20260918" in config
 ), "supported V46l/V46s controller identity"
 for token in ("M5.Imu.getType() != m5::imu_bmi270", "getImuInstancePtr(0)", "sensor_mask_accel",
               "sensor_mask_gyro", "accel_sequence", "gyro_sequence"):
