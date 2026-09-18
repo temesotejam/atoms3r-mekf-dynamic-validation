@@ -3,13 +3,14 @@
 from pathlib import Path
 import hashlib, subprocess, tempfile
 from v46t_current_observation_contract import NEW_PREFIX, NEW_AGE, normalize_current_observation
+from v46ac_delay_comp_contract import normalize_runner as normalize_v46ac_runner
 from v46ab_no_prediction_contract import normalize_runner as normalize_v46ab_runner
 from v46aa_control_zero_contract import normalize_runner as normalize_v46aa_runner
 from v46z_comparison_zero_contract import normalize_runner as normalize_v46z_runner
 R=Path(__file__).resolve().parents[1]
 s=(R/'src/experiment_runner.cpp').read_text()
 base='abed74514dd0c29d494c3172b60efa466553b8015c649e4f5306b472a289d893'
-assert hashlib.sha256(normalize_current_observation(normalize_v46z_runner(normalize_v46aa_runner(normalize_v46ab_runner(s)))).encode()).hexdigest()==base
+assert hashlib.sha256(normalize_current_observation(normalize_v46z_runner(normalize_v46aa_runner(normalize_v46ab_runner(normalize_v46ac_runner(s))))).encode()).hexdigest()==base
 start=s.index('void ExperimentRunner::logSampleNow() {')
 body=s[start:s.index('void ExperimentRunner::finishRun()',start)]
 assert body.count('telemetrySnapshot()')==1

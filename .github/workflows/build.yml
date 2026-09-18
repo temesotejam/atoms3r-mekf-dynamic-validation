@@ -18,7 +18,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Verify V46ab timing, current observation and retained controller envelope
+      - name: Verify V46ac timing, current observation and retained controller envelope
         run: |
           set -euxo pipefail
           python tools/test_v46u_timing.py
@@ -32,6 +32,7 @@ jobs:
           python tools/test_v46z_comparison_zero.py
           python tools/test_v46aa_control_zero.py
           python tools/test_v46ab_no_prediction.py
+          python tools/test_v46ac_delay_compensation.py
       - name: Run retained native acquisition, startup, control and MEKF tests
         run: |
           set -euxo pipefail
@@ -46,7 +47,7 @@ jobs:
           python -m json.tool site/manifest.json >/dev/null
       - name: Install PlatformIO
         run: pip install platformio
-      - name: Build V46ab firmware with verified BMI270 transport patch
+      - name: Build V46ac firmware with verified BMI270 transport patch
         run: |
           set -euxo pipefail
           pio pkg install -e atoms3cam
@@ -62,7 +63,7 @@ jobs:
           cp bmi270-build-patch.json dist/
           python "$HOME/.platformio/packages/tool-esptoolpy/esptool.py" --chip esp32s3 merge_bin -o dist/merged-firmware.bin 0x0000 dist/bootloader.bin 0x8000 dist/partitions.bin 0xe000 dist/boot_app0.bin 0x10000 dist/firmware.bin
           printf '%s\n' "$GITHUB_SHA" > dist/build-sha.txt
-          printf '%s\n' 'V46ab 0.46.27; frozen 1ms BMI270 acquisition; posterior measurement-relative MEKF shared by video and Autonomous timing; prediction diagnostic-only; controller output envelope and ESTOP retained' > dist/FLASH_LAYOUT.txt
+          printf '%s\n' 'V46ac 0.46.28; frozen 1ms BMI270 acquisition; posterior video angle plus lightweight 3ms gyro timing compensation; heavy Autonomous quaternion prediction disabled; output envelope and ESTOP retained' > dist/FLASH_LAYOUT.txt
           (cd dist && sha256sum *.bin > SHA256SUMS.txt)
           git diff --exit-code
       - uses: actions/upload-artifact@v4

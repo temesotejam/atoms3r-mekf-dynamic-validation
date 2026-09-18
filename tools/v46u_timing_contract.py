@@ -1,6 +1,7 @@
 """Strict inverse of reviewed timing-only changes for retained baseline tests."""
 from pathlib import Path
 import json
+from v46ac_delay_comp_contract import normalize_config as normalize_v46ac_config
 from v46ab_no_prediction_contract import normalize_config as normalize_v46ab_config
 from v46aa_control_zero_contract import normalize_log_types as normalize_v46aa_log_types
 from v46z_comparison_zero_contract import normalize_log_types as normalize_v46z_log_types
@@ -8,6 +9,7 @@ ROOT=Path(__file__).resolve().parents[1]
 def original_timing_file(path):
     data=(ROOT/path).read_text()
     if path == 'src/config.h':
+        data=normalize_v46ac_config(data)
         data=normalize_v46ab_config(data)
     # V46aa makes the timing detector reference explicit without changing its
     # algebraic value. Reverse its identity/log extension first.

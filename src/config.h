@@ -91,6 +91,12 @@ static constexpr uint8_t BMI270_ACCEL_ODR_CODE = 0x09;
 // modes only. Autonomous peak/zero-cross timing uses posterior measurement-relative MEKF.
 static constexpr uint32_t MEKF_CONTROL_PREDICTION_FIXED_US = 2500UL;
 static constexpr uint32_t MEKF_CONTROL_PREDICTION_MAX_US = 10000UL;
+// V46ac autonomous timing compensation begin
+// Lightweight actuator-delay compensation for Autonomous timing only.
+// It predicts the posterior measurement-relative pitch forward by 3.0 ms
+// using the bias-corrected, MEKF-scaled Y gyro rate.
+static constexpr uint32_t ENERGY_CONTROL_AUTONOMOUS_TIMING_COMPENSATION_US = 3000UL;
+// V46ac autonomous timing compensation end
 static constexpr uint8_t ROLLER_IO_TASK_CORE = 0;
 static constexpr uint8_t ROLLER_IO_TASK_PRIORITY = 4;
 static constexpr uint32_t ROLLER_IO_TASK_STACK_BYTES = 6144UL;
@@ -113,7 +119,7 @@ static constexpr uint32_t MADGWICK_SETTLING_MS = 5000UL;
 // Dedicated manual-release capture. The first window is held static by the
 // operator; it is metadata, not a per-run angle-zero operation.
 static constexpr char PASSIVE_CAPTURE_FIRMWARE_REVISION[] = "energy_control_autonomous_v7_side_response_correction_20260904";
-static constexpr char ATTITUDE_VALIDATION_REVISION[] = "v46ab_no_control_prediction_20260918";
+static constexpr char ATTITUDE_VALIDATION_REVISION[] = "v46ac_light_delay_compensation_20260918";
 static constexpr float MEKF_GYRO_Y_SCALE = 0.908911f;
 static constexpr uint32_t PASSIVE_CAPTURE_DURATION_MS = 60000UL;
 static constexpr uint32_t PASSIVE_STATIC_WINDOW_MS = 3000UL;

@@ -239,12 +239,24 @@ void ExperimentRunner::updateFilterSeries(const ImuReading& r) {
   if (mekf_initialized_) {
     const auto e = mekf_.eulerDeg();
     raw_mekf_pitch_abs_deg_ = e.pitch;
-    const uint32_t sample_age_us = r.last_gyro_update_us == 0 ? 0 : static_cast<uint32_t>(micros() - r.last_gyro_update_us);
-    const uint32_t horizon_us = min<uint32_t>(Config::MEKF_CONTROL_PREDICTION_MAX_US,
-        sample_age_us + Config::MEKF_CONTROL_PREDICTION_FIXED_US);
-    status_.mekf_prediction_horizon_us = horizon_us;
-    raw_mekf_predicted_abs_deg_ = mekf_.predictEulerDeg(mekf_gyro, static_cast<float>(horizon_us) * 1.0e-6f).pitch;
-    status_.pitch_mekf_predicted_abs_deg = raw_mekf_predicted_abs_deg_;
+    // V46ac autonomous diagnostic prediction begin
+    // Avoid the quaternion forward-prediction cost in Autonomous. Legacy
+    // non-Autonomous modes retain the previous prediction behavior.
+    if (energy_control_autonomous_mode_) {
+      status_.mekf_prediction_horizon_us = 0;
+      raw_mekf_predicted_abs_deg_ = NAN;
+      status_.pitch_mekf_predicted_abs_deg = NAN;
+    } else {
+      const uint32_t sample_age_us = r.last_gyro_update_us == 0 ? 0 :
+          static_cast<uint32_t>(micros() - r.last_gyro_update_us);
+      const uint32_t horizon_us = min<uint32_t>(Config::MEKF_CONTROL_PREDICTION_MAX_US,
+          sample_age_us + Config::MEKF_CONTROL_PREDICTION_FIXED_US);
+      status_.mekf_prediction_horizon_us = horizon_us;
+      raw_mekf_predicted_abs_deg_ = mekf_.predictEulerDeg(
+          mekf_gyro, static_cast<float>(horizon_us) * 1.0e-6f).pitch;
+      status_.pitch_mekf_predicted_abs_deg = raw_mekf_predicted_abs_deg_;
+    }
+    // V46ac autonomous diagnostic prediction end
     const auto q = mekf_.quaternion();
     status_.mekf_q_w = q.w; status_.mekf_q_x = q.x;
     status_.mekf_q_y = q.y; status_.mekf_q_z = q.z;
@@ -421,7 +433,7 @@ void ExperimentRunner::updateStartupCalibration(const ImuReading& r) {
   status_.state = ExperimentState::MADGWICK_SETTLING;
 }
 
-void ExperimentRunner::updateDisplayedAngles(const ImuReading&) {
+void ExperimentRunner::updateDisplayedAngles(const ImuReading& r) {
   status_.pitch_mekf_abs_deg = raw_mekf_pitch_abs_deg_;
   status_.pitch_mekf_predicted_abs_deg = raw_mekf_predicted_abs_deg_;
   status_.pitch_madgwick_dynamic_abs_deg = raw_dynamic_bias_pitch_deg_[Config::FILTER_ADOPTED_INDEX];
@@ -454,15 +466,24 @@ void ExperimentRunner::updateDisplayedAngles(const ImuReading&) {
   // V46z comparison-zero begin
   updateMekfComparisonRelativeAngles();
   // V46z comparison-zero end
-  // V46ab no-control-prediction begin
-  // Autonomous control and video comparison use the exact same posterior,
-  // measurement-start-relative coordinate. Predicted MEKF remains diagnostic only.
-  if (energy_control_autonomous_mode_) {
-    status_.pitch_mekf_deg = status_.pitch_mekf_measurement_relative_deg;
-  }
+  // V46ac delay compensation begin
+  // Video comparison stays on the unpredicted posterior measurement-relative
+  // angle. Autonomous timing gets only a lightweight fixed 3 ms projection to
+  // compensate decision + actuator-current latency.
   status_.pitch_mekf_detector_relative_deg =
       status_.pitch_mekf_measurement_relative_deg;
-  // V46ab no-control-prediction end
+  if (energy_control_autonomous_mode_) {
+    const float mekf_pitch_rate_dps =
+        (r.gy_dps - status_.mekf_bias_y_dps) * Config::MEKF_GYRO_Y_SCALE;
+    const float compensation_s =
+        static_cast<float>(Config::ENERGY_CONTROL_AUTONOMOUS_TIMING_COMPENSATION_US) * 1.0e-6f;
+    status_.pitch_mekf_detector_relative_deg =
+        isfinite(status_.pitch_mekf_measurement_relative_deg) && isfinite(mekf_pitch_rate_dps)
+            ? status_.pitch_mekf_measurement_relative_deg + mekf_pitch_rate_dps * compensation_s
+            : NAN;
+    status_.pitch_mekf_deg = status_.pitch_mekf_detector_relative_deg;
+  }
+  // V46ac delay compensation end
 }
 
 void ExperimentRunner::updateCurrentRollState(const ImuReading& r, uint32_t now_ms) {
