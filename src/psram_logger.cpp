@@ -11,7 +11,7 @@ extern Roller485Manager roller;
 
 #include "config.h"
 
-static constexpr uint16_t RWLOG_FORMAT_VERSION = 48;
+static constexpr uint16_t RWLOG_FORMAT_VERSION = 49;
 static constexpr uint32_t RWLOG_FLAG_CRC32 = 1U << 0;
 static constexpr size_t STREAM_CHUNK_BYTES = 4096;
 
@@ -513,7 +513,7 @@ String PsramLogger::buildMetadataJson() const {
   json += "\"energy_control_v0_event_overflow\":" + String(energy_control_v0_event_overflow_ ? "true" : "false") + ",";
   json += "\"e2_shadow_enabled\":false,";
   json += "\"e2_shadow_role\":\"offline_diagnostic_only;not_called_by_Q1_or_its_validity_logic\",";
-  json += "\"angle_reference_policy\":\"MEKF_absolute_remains_continuous;comparison_only_relative_angles_are_zeroed_at_start_sync_measurement_and_trial_boundaries;control_angle_semantics_unchanged\",";
+  json += "\"angle_reference_policy\":\"MEKF_absolute_remains_continuous;posterior_measurement_relative_angle_is_shared_by_video_comparison_and_autonomous_timing_control\",";
   json += "\"comparison_zero_source\":\"posterior_pitch_mekf_abs_deg_snapshot_only;does_not_reset_MEKF_quaternion_bias_or_covariance\",";
   json += "\"comparison_zero_sample_time_semantics\":\"last_consumed_gyro_host_acquisition_timestamp_us_at_reference_capture\",";
   json += "\"attitude_filter_adopted\":\"MEKF_6state_error_state\",";
@@ -521,10 +521,12 @@ String PsramLogger::buildMetadataJson() const {
   json += "\"mekf_coordinate_mapping\":\"Ry180_body_frame:accel=(-ax,+ay,-az);gyro=(-gx,+gy_scaled,-gz);reported_pitch=physical_video_sign\",";
   json += "\"mekf_gyro_y_scale\":" + String(Config::MEKF_GYRO_Y_SCALE, 6) + ",";
   json += "\"mekf_gyro_y_scale_role\":\"pre_prediction_sensor_calibration_not_output_angle_scaling\",";
-  json += "\"mekf_control_angle_reference\":\"measurement_start_zero_subtracted;used_by_autonomous_control_zero_cross_and_peak_detection\",";
+  json += "\"mekf_control_angle_reference\":\"autonomous_only:posterior_MEKF_minus_measurement_start_posterior;identical_to_pitch_mekf_measurement_relative_deg;legacy_non_autonomous_modes_keep_previous_semantics\",";
   json += "\"mekf_abs_angle_reference\":\"continuous_gravity_frame_no_per_run_zero_subtraction;preferred_for_absolute_estimator_diagnostics\",";
-  json += "\"mekf_detector_relative_reference\":\"predicted_MEKF_at_each_sample_minus_predicted_MEKF_at_measurement_start;initial_upright_pose_is_zero;used_directly_for_autonomous_peak_and_zero_cross_timing\",";
-  json += "\"mekf_detector_zero_role\":\"timing_reference_only;never_resets_MEKF_state_and_never_defines_energy_peak_amplitude\",";
+  json += "\"mekf_detector_relative_reference\":\"posterior_MEKF_at_each_sample_minus_posterior_MEKF_at_measurement_start;identical_to_pitch_mekf_measurement_relative_deg;initial_upright_pose_is_zero\",";
+  json += "\"mekf_detector_zero_role\":\"measurement_start_posterior_reference;never_resets_MEKF_state_and_never_defines_energy_peak_amplitude\",";
+  json += "\"autonomous_control_prediction_enabled\":false,";
+  json += "\"mekf_prediction_role\":\"diagnostic_only_during_autonomous;pitch_mekf_predicted_abs_deg_and_horizon_are_logged_but_not_read_by_autonomous_peak_or_zero_cross_timing\",";
   json += "\"madgwick_dynamic_abs_reference\":\"continuous_bias_corrected_dynamic_hold073_filter;online_comparison_only\",";
   json += "\"mekf_accel_rejection\":\"adaptive_R_from_accel_norm_and_predicted_gravity_direction;skip_below_min_confidence\",";
   json += "\"mekf_accel_mag_full_g\":" + String(Config::MEKF_ACCEL_MAG_FULL_G, 4) + ",";
