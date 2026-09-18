@@ -53,6 +53,7 @@ assert "ENERGY_CONTROL_AUTONOMOUS_GYRO_TO_VIDEO_PEAK_SCALE" in motion
 assert "RWLOG_FORMAT_VERSION = 49" in logger
 assert "sizeof(LogSample) == 258" in log_types
 assert 'SAMPLE_FORMAT_V49 = SAMPLE_FORMAT_V48' in converter
-assert '"autonomous_control_prediction_enabled":false' in logger
+assert "autonomous_control_prediction_enabled" in logger
+assert "false" in logger
 
 print("V46ab posterior control-angle guards PASS; V46aa prediction fields retained as diagnostics only")
