@@ -54,6 +54,16 @@ struct ExperimentStatus {
   float pitch_mekf_deg = 0.0f;              // run-relative control/detector angle when applicable
   float pitch_mekf_abs_deg = 0.0f;          // posterior physical/video body-frame pitch
   float pitch_mekf_predicted_abs_deg = 0.0f; // one-step-ahead control-time pitch
+  // V46z comparison-only zero references. MEKF state is never reset by these.
+  float pitch_mekf_start_sync_relative_deg = NAN;
+  float pitch_mekf_measurement_relative_deg = NAN;
+  float pitch_mekf_trial_relative_deg = NAN;
+  float mekf_start_sync_zero_abs_deg = NAN;
+  float mekf_measurement_zero_abs_deg = NAN;
+  float mekf_trial_zero_abs_deg = NAN;
+  uint32_t mekf_start_sync_zero_sample_us = 0;
+  uint32_t mekf_measurement_zero_sample_us = 0;
+  uint32_t mekf_trial_zero_sample_us = 0;
   uint32_t mekf_prediction_horizon_us = 0;
   float pitch_madgwick_dynamic_abs_deg = 0.0f;
   float mekf_q_w = 1.0f;
@@ -302,6 +312,8 @@ private:
   float betaCeilingForStrategy(uint8_t index) const;
   uint16_t betaHoldAfterInputMsForStrategy(uint8_t index) const;
   void captureAngleOffsets();
+  void captureMekfComparisonZero(float& zero_abs_deg, uint32_t& zero_sample_us);
+  void updateMekfComparisonRelativeAngles();
   void updateDisplayedAngles(const ImuReading& r);
   void updateCurrentRollState(const ImuReading& r, uint32_t now_ms);
   // Legacy E2 is compiled only as an offline diagnostic reference and is not
