@@ -22,7 +22,7 @@ def main() -> None:
 
     assert "ENERGY_CONTROL_AUTONOMOUS_CURRENT_MA = 300" in config
     assert "ENERGY_CONTROL_AUTONOMOUS_MAX_PULSE_MS = 100" in config
-    assert "CURRENT_AUDIT_FAST_READ_PERIOD_US = 2000UL" in config
+    assert "CURRENT_AUDIT_FAST_READ_PERIOD_US = 1000UL" in config
     assert "CURRENT_AUDIT_LOG_PERIOD_US = 2000UL" in config
 
     # The fast path augments but does not replace the ordinary full safety/status
