@@ -2,12 +2,13 @@
 from pathlib import Path
 import hashlib,json,subprocess,tempfile,copy
 from v46u_timing_contract import ROOT,original_timing_file
+from v46ab_no_prediction_contract import normalize_runner as normalize_v46ab_runner
 from v46aa_control_zero_contract import normalize_runner as normalize_v46aa_runner
 from v46z_comparison_zero_contract import normalize_runner as normalize_v46z_runner
 from check_v46u_deadlines import assess
 
 def main():
-    assert hashlib.sha256(normalize_v46z_runner(normalize_v46aa_runner((ROOT/'src/experiment_runner.cpp').read_text())).encode()).hexdigest()=='2af5934f994c9c435ca53f4ef65ec98a5a95a4bd3355a740c0f1001e290f8c0e'
+    assert hashlib.sha256(normalize_v46z_runner(normalize_v46aa_runner(normalize_v46ab_runner((ROOT/'src/experiment_runner.cpp').read_text()))).encode()).hexdigest()=='2af5934f994c9c435ca53f4ef65ec98a5a95a4bd3355a740c0f1001e290f8c0e'
     baseline=json.loads((ROOT/'tools/v46s_audit_baseline.json').read_text())
     for p,h in baseline['protected'].items():
         assert hashlib.sha256(original_timing_file(p)).hexdigest()==h,p
@@ -55,5 +56,5 @@ int main(){
         assert not assess(bad)['imu_control_observed_pass']
     bad=copy.deepcopy(m);bad['v46n_imu_acquisition']['fault']=True
     assert not assess(bad)['imu_control_observed_pass']
-    print('PASS: unchanged controller/estimators/ODR/safety; V46aa frozen 1MHz IMU + 1ms current audit guards; real deadline counters')
+    print('PASS: unchanged controller/estimators/ODR/safety; V46ab frozen 1MHz IMU + 1ms current audit guards; real deadline counters')
 if __name__=='__main__':main()

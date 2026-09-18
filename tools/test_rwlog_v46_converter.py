@@ -9,7 +9,9 @@ import convert_rwlog_to_csv as converter
 
 
 def write_fixture(path: Path, version: int) -> None:
-    if version == 48:
+    if version == 49:
+        sample_format = converter.SAMPLE_FORMAT_V49
+    elif version == 48:
         sample_format = converter.SAMPLE_FORMAT_V48
     elif version == 47:
         sample_format = converter.SAMPLE_FORMAT_V47
@@ -102,4 +104,5 @@ if __name__ == "__main__":
     check(46)
     check(47)
     check(48)
-    print("RWLOG v44-v47 compatibility and v48 explicit-control-zero CRC/conversion checks passed")
+    check(49)
+    print("RWLOG v44-v48 compatibility and v49 posterior-control semantics conversion checks passed")

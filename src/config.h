@@ -87,6 +87,8 @@ static constexpr uint16_t BMI270_GYRO_ODR_HZ = 400;
 static constexpr uint16_t BMI270_ACCEL_ODR_HZ = 200;
 static constexpr uint8_t BMI270_GYRO_ODR_CODE = 0x0A;
 static constexpr uint8_t BMI270_ACCEL_ODR_CODE = 0x09;
+// V46ab: retained for diagnostic predicted-angle logging and legacy non-Autonomous
+// modes only. Autonomous peak/zero-cross timing uses posterior measurement-relative MEKF.
 static constexpr uint32_t MEKF_CONTROL_PREDICTION_FIXED_US = 2500UL;
 static constexpr uint32_t MEKF_CONTROL_PREDICTION_MAX_US = 10000UL;
 static constexpr uint8_t ROLLER_IO_TASK_CORE = 0;
@@ -111,7 +113,7 @@ static constexpr uint32_t MADGWICK_SETTLING_MS = 5000UL;
 // Dedicated manual-release capture. The first window is held static by the
 // operator; it is metadata, not a per-run angle-zero operation.
 static constexpr char PASSIVE_CAPTURE_FIRMWARE_REVISION[] = "energy_control_autonomous_v7_side_response_correction_20260904";
-static constexpr char ATTITUDE_VALIDATION_REVISION[] = "v46aa_control_upright_zero_20260918";
+static constexpr char ATTITUDE_VALIDATION_REVISION[] = "v46ab_no_control_prediction_20260918";
 static constexpr float MEKF_GYRO_Y_SCALE = 0.908911f;
 static constexpr uint32_t PASSIVE_CAPTURE_DURATION_MS = 60000UL;
 static constexpr uint32_t PASSIVE_STATIC_WINDOW_MS = 3000UL;

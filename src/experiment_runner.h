@@ -61,9 +61,11 @@ struct ExperimentStatus {
   float mekf_start_sync_zero_abs_deg = NAN;
   float mekf_measurement_zero_abs_deg = NAN;
   float mekf_trial_zero_abs_deg = NAN;
-  // V46aa control timing coordinate: predicted MEKF angle relative to the
-  // predicted angle at measurement start (initial upright pose).
+  // V46ab control timing coordinate: posterior MEKF angle relative to the
+  // measurement-start posterior angle (initial upright pose). This is identical
+  // to pitch_mekf_measurement_relative_deg during Autonomous control.
   float pitch_mekf_detector_relative_deg = NAN;
+  // Retained V46aa prediction-reference diagnostics only; not used by V46ab control.
   float mekf_detector_zero_predicted_abs_deg = NAN;
   uint32_t mekf_detector_zero_sample_us = 0;
   uint32_t mekf_start_sync_zero_sample_us = 0;
@@ -503,9 +505,9 @@ private:
   uint32_t energy_control_autonomous_last_gyro_sample_us_ = 0;
   float energy_control_autonomous_last_gyro_rate_dps_ = 0.0f;
   float energy_control_autonomous_gyro_relative_deg_ = 0.0f;
-  // MEKF detector detects timing only. V46aa uses the explicit
-  // pitch_mekf_detector_relative_deg coordinate whose zero is the predicted
-  // MEKF angle at measurement start. It is never the energy/peak-amplitude coordinate.
+  // MEKF detector detects timing only. V46ab uses the posterior
+  // measurement-relative MEKF coordinate directly. It is never the
+  // energy/peak-amplitude coordinate.
   bool energy_control_autonomous_detector_has_previous_angle_ = false;
   float energy_control_autonomous_detector_zero_angle_deg_ = 0.0f;  // legacy retained for layout/source compatibility; not used by detector.
   float energy_control_autonomous_previous_detector_relative_angle_deg_ = 0.0f;

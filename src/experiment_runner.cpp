@@ -454,12 +454,15 @@ void ExperimentRunner::updateDisplayedAngles(const ImuReading&) {
   // V46z comparison-zero begin
   updateMekfComparisonRelativeAngles();
   // V46z comparison-zero end
-  // V46aa control-zero update begin
+  // V46ab no-control-prediction begin
+  // Autonomous control and video comparison use the exact same posterior,
+  // measurement-start-relative coordinate. Predicted MEKF remains diagnostic only.
+  if (energy_control_autonomous_mode_) {
+    status_.pitch_mekf_deg = status_.pitch_mekf_measurement_relative_deg;
+  }
   status_.pitch_mekf_detector_relative_deg =
-      isfinite(status_.mekf_detector_zero_predicted_abs_deg)
-          ? raw_mekf_predicted_abs_deg_ - status_.mekf_detector_zero_predicted_abs_deg
-          : NAN;
-  // V46aa control-zero update end
+      status_.pitch_mekf_measurement_relative_deg;
+  // V46ab no-control-prediction end
 }
 
 void ExperimentRunner::updateCurrentRollState(const ImuReading& r, uint32_t now_ms) {

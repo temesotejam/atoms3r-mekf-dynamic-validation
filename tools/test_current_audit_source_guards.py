@@ -82,9 +82,9 @@ def main() -> None:
     assert "row.led_state = status_.led_state ? 1 : 0" in runner
     assert "row.sync_event_id = status_.sync_event_id" in runner
 
-    assert "RWLOG_FORMAT_VERSION = 48" in logger
+    assert "RWLOG_FORMAT_VERSION = 49" in logger
     assert "actual_current_audit_policy" in logger
-    print("V46aa MEKF/current-audit source guard checks passed")
+    print("V46ab MEKF/current-audit source guard checks passed")
 
 
 if __name__ == "__main__":
