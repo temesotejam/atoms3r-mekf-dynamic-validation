@@ -81,6 +81,7 @@ static constexpr char CURRENT_ROLL_UI_REVISION[] = "current_roll_static_ui_v1_20
 
 // V46g high-rate BMI270 schedule. Exact timing is microsecond-based.
 static constexpr uint32_t IMU_POLL_PERIOD_US = 1000UL;
+static constexpr uint32_t BMI270_I2C_HZ = 1000000UL;  // BMI270 Fast-mode Plus maximum.
 static constexpr uint16_t IMU_PERIOD_MS = 2;  // legacy integer RWLOG header field only
 static constexpr uint16_t BMI270_GYRO_ODR_HZ = 400;
 static constexpr uint16_t BMI270_ACCEL_ODR_HZ = 200;
@@ -98,7 +99,7 @@ static constexpr uint16_t ROLLER_READ_PERIOD_MS = 20;
 // Actual-current audit only. While a motor command is active, CURRENT_READBACK
 // is sampled on this independent schedule. These samples are observational and
 // cannot select, shorten, extend, or otherwise alter a motor pulse.
-static constexpr uint32_t CURRENT_AUDIT_FAST_READ_PERIOD_US = 2000UL;
+static constexpr uint32_t CURRENT_AUDIT_FAST_READ_PERIOD_US = 1000UL;  // Try every 1 ms to keep valid samples within the 2 ms audit budget.
 static constexpr uint32_t CURRENT_AUDIT_LOG_PERIOD_US = 2000UL;
 static constexpr uint16_t WEB_UPDATE_PERIOD_MS = 500;
 static constexpr uint16_t IMU_ERROR_LIMIT = 10;
@@ -110,7 +111,7 @@ static constexpr uint32_t MADGWICK_SETTLING_MS = 5000UL;
 // Dedicated manual-release capture. The first window is held static by the
 // operator; it is metadata, not a per-run angle-zero operation.
 static constexpr char PASSIVE_CAPTURE_FIRMWARE_REVISION[] = "energy_control_autonomous_v7_side_response_correction_20260904";
-static constexpr char ATTITUDE_VALIDATION_REVISION[] = "v46u_timing_reader_20260915";
+static constexpr char ATTITUDE_VALIDATION_REVISION[] = "v46v_deadline_tightening_20260918";
 static constexpr float MEKF_GYRO_Y_SCALE = 0.908911f;
 static constexpr uint32_t PASSIVE_CAPTURE_DURATION_MS = 60000UL;
 static constexpr uint32_t PASSIVE_STATIC_WINDOW_MS = 3000UL;
