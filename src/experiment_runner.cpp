@@ -437,11 +437,7 @@ void ExperimentRunner::updateDisplayedAngles(const ImuReading&) {
     status_.pitch_madgwick_dynamic_bias_deg = raw_dynamic_bias_pitch_deg_[Config::FILTER_ADOPTED_INDEX];
     status_.pitch_accel_only_deg = raw_accel_pitch_deg_;
   } else {
-    // V46ab control-angle begin
-    status_.pitch_mekf_deg = energy_control_autonomous_mode_
-        ? raw_mekf_pitch_abs_deg_ - offset_mekf_pitch_deg_
-        : raw_mekf_predicted_abs_deg_ - offset_mekf_pitch_deg_;
-    // V46ab control-angle end
+    status_.pitch_mekf_deg = raw_mekf_predicted_abs_deg_ - offset_mekf_pitch_deg_;
     status_.pitch_madgwick_beta1_raw_deg = raw_beta1_raw_pitch_deg_ - offset_beta1_raw_deg_;
     status_.pitch_madgwick_beta1_bias_deg = raw_beta1_bias_pitch_deg_ - offset_beta1_bias_deg_;
     for (uint8_t i = 0; i < Config::DYNAMIC_BETA_COUNT; ++i) {
@@ -458,13 +454,15 @@ void ExperimentRunner::updateDisplayedAngles(const ImuReading&) {
   // V46z comparison-zero begin
   updateMekfComparisonRelativeAngles();
   // V46z comparison-zero end
-  // V46ab detector-angle begin
-  // Autonomous timing now uses exactly the same posterior, measurement-start
-  // relative MEKF coordinate used for video comparison. The predicted angle is
-  // retained only as a diagnostic and does not feed autonomous timing.
+  // V46ab no-control-prediction begin
+  // Autonomous control and video comparison use the exact same posterior,
+  // measurement-start-relative coordinate. Predicted MEKF remains diagnostic only.
+  if (energy_control_autonomous_mode_) {
+    status_.pitch_mekf_deg = status_.pitch_mekf_measurement_relative_deg;
+  }
   status_.pitch_mekf_detector_relative_deg =
       status_.pitch_mekf_measurement_relative_deg;
-  // V46ab detector-angle end
+  // V46ab no-control-prediction end
 }
 
 void ExperimentRunner::updateCurrentRollState(const ImuReading& r, uint32_t now_ms) {
