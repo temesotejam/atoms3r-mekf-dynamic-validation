@@ -20,7 +20,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Verify V46u timing and retained safety guards
+      - name: Verify V46v timing and retained safety guards
         run: |
           set -euxo pipefail
           python tools/test_v46u_timing.py
@@ -40,11 +40,11 @@ jobs:
           g++ -std=c++17 -O2 tools/test_mekf_host.cpp src/mekf6.cpp -o /tmp/test_mekf
           /tmp/test_mekf
           python -m json.tool site/manifest.json >/dev/null
-          grep -q 'V46u / 0.46.20' site/index.html
-          grep -q 'v46u_timing_reader_20260915' src/config.h
+          grep -q 'V46v / 0.46.21' site/index.html
+          grep -q 'v46v_deadline_tightening_20260918' src/config.h
       - name: Install PlatformIO
         run: pip install platformio
-      - name: Build V46u firmware with verified BMI270 patch
+      - name: Build V46v firmware with verified BMI270 patch
         run: |
           set -euxo pipefail
           pio pkg install -e atoms3cam
@@ -97,9 +97,9 @@ jobs:
                   if published != expected:
                       raise ValueError('Published build SHA differs: ' + published)
                   manifest = json.loads(get('manifest.json'))
-                  if manifest['version'] != '0.46.20':
+                  if manifest['version'] != '0.46.21':
                       raise ValueError('Unexpected firmware version')
-                  if 'V46u / 0.46.20' not in get('index.html').decode():
+                  if 'V46v / 0.46.21' not in get('index.html').decode():
                       raise ValueError('Published page label differs')
                   provenance = json.loads(get('bmi270-build-patch.json'))
                   if provenance['upstream_git_blob'] != '41732382bbdfe413be758748bca24d9a15a3a1d8':
