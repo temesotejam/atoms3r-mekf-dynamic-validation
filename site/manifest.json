@@ -1,6 +1,6 @@
 {
-  "name": "AtomS3R V46w Fast Solver Motor Validation",
-  "version": "0.46.22",
+  "name": "AtomS3R V46x Fast Solver Motor Validation",
+  "version": "0.46.23",
   "builds": [{"chipFamily": "ESP32-S3", "parts": [
     {"path": "firmware/bootloader.bin", "offset": 0},
     {"path": "firmware/partitions.bin", "offset": 32768},

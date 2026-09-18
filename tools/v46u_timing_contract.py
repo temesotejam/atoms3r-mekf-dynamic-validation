@@ -4,6 +4,12 @@ import json
 ROOT=Path(__file__).resolve().parents[1]
 def original_timing_file(path):
     data=(ROOT/path).read_text()
+    # V46x changes only the polling experiment identity/period. Reverse it to
+    # V46w first, then unwind the earlier timing-only releases.
+    if path == 'src/config.h':
+        data=data.replace('v46x_imu_poll_500us_20260918','v46w_imu_poll_2500us_20260918')
+        data=data.replace('IMU_POLL_PERIOD_US = 500UL;  // V46x: poll at 2 kHz to reduce data-ready discovery latency.',
+                          'IMU_POLL_PERIOD_US = 2500UL;  // V46w: poll once per nominal 400 Hz gyro period.')
     # V46w changes only the polling experiment identity/period. Reverse these
     # before reversing V46v/V46u so retained protected-source hashes still certify
     # the unchanged controller and estimators.
