@@ -55,7 +55,7 @@ def main() -> None:
     # only as a synchronized comparison signal.
     for token in (
         "q1_shadow_angle_zero_deg_ = status_.pitch_mekf_deg",
-        "const float detector_relative_angle_deg = status_.pitch_mekf_deg",
+        "const float detector_relative_angle_deg = status_.pitch_mekf_detector_relative_deg",
         "const float angle_deg = status_.pitch_mekf_deg",
         "e.theta0_cdeg = centi(status_.pitch_mekf_deg)",
         "identification_peak_angle_deg_ = status_.pitch_mekf_deg",
