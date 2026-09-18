@@ -4,6 +4,12 @@ import json
 ROOT=Path(__file__).resolve().parents[1]
 def original_timing_file(path):
     data=(ROOT/path).read_text()
+    # V46y freezes the selected 1 ms polling specification. Reverse it to the
+    # V46x comparison point first, then unwind the earlier timing-only releases.
+    if path == 'src/config.h':
+        data=data.replace('v46y_frozen_imu_1ms_20260918','v46x_imu_poll_500us_20260918')
+        data=data.replace('IMU_POLL_PERIOD_US = 1000UL;  // V46y frozen IMU host polling specification.',
+                          'IMU_POLL_PERIOD_US = 500UL;  // V46x: poll at 2 kHz to reduce data-ready discovery latency.')
     # V46x changes only the polling experiment identity/period. Reverse it to
     # V46w first, then unwind the earlier timing-only releases.
     if path == 'src/config.h':
