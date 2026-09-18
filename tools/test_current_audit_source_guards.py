@@ -69,7 +69,7 @@ def main() -> None:
     assert runner.count("pitch_dynamic_beta_deg[Config::FILTER_ADOPTED_INDEX]") == 1
     assert "Adafruit_Madgwick" not in imu_manager
     assert "RWLOG v46: adopted MEKF" in log_types
-    assert "sizeof(LogSample) == 226" in log_types
+    assert "sizeof(LogSample) == 250" in log_types
 
     # Video synchronization is preserved byte-for-byte at the protocol level.
     for token in (
@@ -82,9 +82,9 @@ def main() -> None:
     assert "row.led_state = status_.led_state ? 1 : 0" in runner
     assert "row.sync_event_id = status_.sync_event_id" in runner
 
-    assert "RWLOG_FORMAT_VERSION = 46" in logger
+    assert "RWLOG_FORMAT_VERSION = 47" in logger
     assert "actual_current_audit_policy" in logger
-    print("v46 MEKF/current-audit source guard checks passed")
+    print("V46z MEKF/current-audit source guard checks passed")
 
 
 if __name__ == "__main__":
