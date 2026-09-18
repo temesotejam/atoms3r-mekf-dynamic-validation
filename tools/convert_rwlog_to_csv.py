@@ -27,8 +27,10 @@ SAMPLE_FORMAT_V45 = SAMPLE_FORMAT_V42 + "IIIIiiiHBB"
 SAMPLE_FORMAT_V46 = SAMPLE_FORMAT_V45 + "h" * 13 + "II" + "BB"
 # v47 appends comparison-only posterior-MEKF zero-reference diagnostics.
 SAMPLE_FORMAT_V47 = SAMPLE_FORMAT_V46 + "h" * 6 + "III"
-# v48 appends explicit predicted-MEKF detector-relative control coordinate.
+# v48 appends explicit detector-relative control diagnostics.
 SAMPLE_FORMAT_V48 = SAMPLE_FORMAT_V47 + "hhI"
+# v49 changes autonomous detector semantics to posterior/no-prediction; layout is unchanged.
+SAMPLE_FORMAT_V49 = SAMPLE_FORMAT_V48
 HEADER_FIELDS = [
     "magic",
     "format_version",
@@ -274,6 +276,7 @@ CSV_COLUMNS_V48 = CSV_COLUMNS_V47 + [
     "mekf_detector_zero_predicted_abs_deg",
     "mekf_detector_zero_sample_us",
 ]
+CSV_COLUMNS_V49 = CSV_COLUMNS_V48
 CSV_COLUMNS_V33 = CSV_COLUMNS_COMMON_PREFIX + [
     "trial_predicted_beta_min", "beta_recovery_tau_s", "beta_model_vbat_mV", "predicted_i_goal_mA", "predicted_peak_current_mA", "beta_model_vbat_status",
     "beta_ceiling_fixed", "beta_ceiling_dynamic_hold073", "beta_ceiling_dynamic_hold120", "beta_ceiling_dynamic_hold170",
@@ -286,6 +289,8 @@ CSV_COLUMNS_V33 = CSV_COLUMNS_COMMON_PREFIX + [
     "beta_phase_state", "beta_phase_progress", "beta_phase_peak_angle_deg", "beta_phase_angle_deg", "beta_phase_ceiling",
 ]
 def csv_columns_for_version(format_version: int) -> list[str]:
+    if format_version >= 49:
+        return CSV_COLUMNS_V49
     if format_version >= 48:
         return CSV_COLUMNS_V48
     if format_version >= 47:
@@ -318,6 +323,8 @@ def csv_columns_for_version(format_version: int) -> list[str]:
 
 
 def sample_format_for_version(format_version: int) -> str:
+    if format_version >= 49:
+        return SAMPLE_FORMAT_V49
     if format_version >= 48:
         return SAMPLE_FORMAT_V48
     if format_version >= 47:
@@ -716,6 +723,8 @@ def convert_sample_v48(values):
 
 
 def convert_sample(values, format_version: int):
+    if format_version >= 49:
+        return convert_sample_v48(values)
     if format_version >= 48:
         return convert_sample_v48(values)
     if format_version >= 47:
@@ -1004,8 +1013,8 @@ def write_energy_control_autonomous_events(metadata: dict, out_dir: Path) -> tup
 def convert(path: Path, out_dir: Path) -> None:
     data = path.read_bytes()
     header = parse_header(data)
-    if header["format_version"] not in (23, 24, 25, 26, 27, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48):
-        raise ValueError(f"this converter expects rwlog format v23-v27, v29-v48, got v{header['format_version']}")
+    if header["format_version"] not in (23, 24, 25, 26, 27, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49):
+        raise ValueError(f"this converter expects rwlog format v23-v27, v29-v49, got v{header['format_version']}")
     sample_format = sample_format_for_version(header["format_version"])
     if header["log_sample_size"] != struct.calcsize(sample_format):
         raise ValueError("unexpected sample size")
@@ -1056,7 +1065,7 @@ def convert(path: Path, out_dir: Path) -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Convert supported RWLOG v23-v48 files to CSV, including control and diagnostic metadata events.")
+    parser = argparse.ArgumentParser(description="Convert supported RWLOG v23-v49 files to CSV, including control and diagnostic metadata events.")
     parser.add_argument("rwlog", type=Path)
     parser.add_argument("--out", type=Path, default=Path("converted_dynamic_beta_hold73_tau73_compare"))
     args = parser.parse_args()
