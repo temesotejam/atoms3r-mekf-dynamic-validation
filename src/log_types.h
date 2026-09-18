@@ -144,8 +144,19 @@ struct LogSample {
   uint32_t imu_sample_age_us;
   uint8_t mekf_accel_used;
   uint8_t attitude_filter_adopted;  // 1 = MEKF
+  // RWLOG v47: comparison-only event-relative MEKF angle references.
+  int16_t pitch_mekf_start_sync_relative_cdeg;
+  int16_t pitch_mekf_measurement_relative_cdeg;
+  int16_t pitch_mekf_trial_relative_cdeg;
+  int16_t mekf_start_sync_zero_abs_cdeg;
+  int16_t mekf_measurement_zero_abs_cdeg;
+  int16_t mekf_trial_zero_abs_cdeg;
+  uint32_t mekf_start_sync_zero_sample_us;
+  uint32_t mekf_measurement_zero_sample_us;
+  uint32_t mekf_trial_zero_sample_us;
+  // RWLOG v47 end
 };
 #pragma pack(pop)
 
 static_assert(sizeof(RwLogFileHeader) == 110, "RwLogFileHeader binary size changed");
-static_assert(sizeof(LogSample) == 226, "LogSample binary size changed");
+static_assert(sizeof(LogSample) == 250, "LogSample binary size changed");
