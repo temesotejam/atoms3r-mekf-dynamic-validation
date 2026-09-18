@@ -4,6 +4,13 @@ import json
 ROOT=Path(__file__).resolve().parents[1]
 def original_timing_file(path):
     data=(ROOT/path).read_text()
+    # V46w changes only the polling experiment identity/period. Reverse these
+    # before reversing V46v/V46u so retained protected-source hashes still certify
+    # the unchanged controller and estimators.
+    if path == 'src/config.h':
+        data=data.replace('v46w_imu_poll_2500us_20260918','v46v_deadline_tightening_20260918')
+        data=data.replace('IMU_POLL_PERIOD_US = 2500UL;  // V46w: poll once per nominal 400 Hz gyro period.',
+                          'IMU_POLL_PERIOD_US = 1000UL;')
     # V46v timing-only changes are reversed first so retained V46u/V46s
     # protected-source hashes still certify the unchanged controller/estimators.
     if path == 'src/config.h':
