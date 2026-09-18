@@ -1056,7 +1056,7 @@ def convert(path: Path, out_dir: Path) -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Convert v23-v27 or v29-v45 RWLOG to CSV, including Q1, Q_IDENT and Energy Control V0 metadata events.")
+    parser = argparse.ArgumentParser(description="Convert supported RWLOG v23-v48 files to CSV, including control and diagnostic metadata events.")
     parser.add_argument("rwlog", type=Path)
     parser.add_argument("--out", type=Path, default=Path("converted_dynamic_beta_hold73_tau73_compare"))
     args = parser.parse_args()
