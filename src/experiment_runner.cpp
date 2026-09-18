@@ -454,6 +454,12 @@ void ExperimentRunner::updateDisplayedAngles(const ImuReading&) {
   // V46z comparison-zero begin
   updateMekfComparisonRelativeAngles();
   // V46z comparison-zero end
+  // V46aa control-zero update begin
+  status_.pitch_mekf_detector_relative_deg =
+      isfinite(status_.mekf_detector_zero_predicted_abs_deg)
+          ? raw_mekf_predicted_abs_deg_ - status_.mekf_detector_zero_predicted_abs_deg
+          : NAN;
+  // V46aa control-zero update end
 }
 
 void ExperimentRunner::updateCurrentRollState(const ImuReading& r, uint32_t now_ms) {
@@ -1117,6 +1123,12 @@ void ExperimentRunner::beginMeasurementRun() {
   }
   updateMekfComparisonRelativeAngles();
   // V46z comparison-zero end
+  // V46aa control-zero capture begin
+  status_.mekf_detector_zero_predicted_abs_deg = raw_mekf_predicted_abs_deg_;
+  status_.mekf_detector_zero_sample_us = imu_ ? imu_->reading().last_gyro_update_us : 0;
+  status_.pitch_mekf_detector_relative_deg =
+      isfinite(status_.mekf_detector_zero_predicted_abs_deg) ? 0.0f : NAN;
+  // V46aa control-zero capture end
   run_start_ms_ = millis();
   if (passive_capture_mode_ || q_ident_mode_ || energy_control_v0_mode_ || energy_control_autonomous_mode_) resetQ1ShadowZeroCrossTracker();
   if (energy_control_v0_mode_) resetEnergyControlV0OutputGate();
@@ -2180,11 +2192,9 @@ void ExperimentRunner::resetEnergyControlAutonomous() {
   energy_control_autonomous_last_gyro_rate_dps_ = 0.0f;
   energy_control_autonomous_gyro_relative_deg_ = 0.0f;
   energy_control_autonomous_detector_has_previous_angle_ = false;
-  energy_control_autonomous_detector_zero_angle_deg_ =
-      status_.pitch_mekf_deg;
-  if (!isfinite(energy_control_autonomous_detector_zero_angle_deg_)) {
-    energy_control_autonomous_detector_zero_angle_deg_ = 0.0f;
-  }
+  // V46aa control-zero reset begin
+  energy_control_autonomous_detector_zero_angle_deg_ = 0.0f;
+  // V46aa control-zero reset end
   energy_control_autonomous_previous_detector_relative_angle_deg_ = 0.0f;
   energy_control_autonomous_previous_detector_rate_dps_ = 0.0f;
   energy_control_autonomous_previous_detector_test_ms_ = 0;
@@ -2558,8 +2568,9 @@ void ExperimentRunner::updateEnergyControlAutonomousMotion(uint32_t now_ms) {
     return;
   }
   const uint32_t t_test_ms = now_ms - run_start_ms_;
-  const float detector_relative_angle_deg = status_.pitch_mekf_deg -
-      energy_control_autonomous_detector_zero_angle_deg_;
+  // V46aa control-zero detector begin
+  const float detector_relative_angle_deg = status_.pitch_mekf_detector_relative_deg;
+  // V46aa control-zero detector end
   if (!isfinite(detector_relative_angle_deg)) return;
   if (!energy_control_autonomous_detector_has_previous_angle_) {
     energy_control_autonomous_detector_has_previous_angle_ = true;
