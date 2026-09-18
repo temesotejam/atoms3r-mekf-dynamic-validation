@@ -83,6 +83,8 @@ for token in ("pitch_mekf_start_sync_relative_deg", "pitch_mekf_measurement_rela
 assert "RWLOG_FORMAT_VERSION = 47" in logger
 assert "sizeof(LogSample) == 250" in log_types
 assert struct.calcsize(converter.SAMPLE_FORMAT_V47) == 250
-assert len(converter.CSV_COLUMNS_V47) == len(struct.unpack(
-    converter.SAMPLE_FORMAT_V47, bytes(struct.calcsize(converter.SAMPLE_FORMAT_V47))))
+# The converter has derived/display CSV columns, so binary field count is not
+# required to equal CSV column count. The synthetic v47 fixture above exercises
+# the actual unpack -> conversion -> CSV path.
+assert len(converter.CSV_COLUMNS_V47) == len(converter.CSV_COLUMNS_V46) + 9
 print("V46z comparison-zero guards PASS: posterior-only references, control unchanged, RWLOG v47 consistent")
