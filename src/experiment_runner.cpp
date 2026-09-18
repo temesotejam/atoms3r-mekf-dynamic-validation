@@ -5773,6 +5773,12 @@ void ExperimentRunner::logSampleNow() {
   row.mekf_measurement_zero_sample_us = status_.mekf_measurement_zero_sample_us;
   row.mekf_trial_zero_sample_us = status_.mekf_trial_zero_sample_us;
   // V46z comparison-zero end
+  // V46aa control-zero log begin
+  row.pitch_mekf_detector_relative_cdeg = centi(status_.pitch_mekf_detector_relative_deg);
+  row.mekf_detector_zero_predicted_abs_cdeg =
+      centi(status_.mekf_detector_zero_predicted_abs_deg);
+  row.mekf_detector_zero_sample_us = status_.mekf_detector_zero_sample_us;
+  // V46aa control-zero log end
   row.led_state = status_.led_state ? 1 : 0;
   row.sync_event_id = status_.sync_event_id;
   row.log_active =
