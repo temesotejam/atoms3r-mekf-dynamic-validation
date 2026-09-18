@@ -11,7 +11,7 @@ extern Roller485Manager roller;
 
 #include "config.h"
 
-static constexpr uint16_t RWLOG_FORMAT_VERSION = 47;
+static constexpr uint16_t RWLOG_FORMAT_VERSION = 48;
 static constexpr uint32_t RWLOG_FLAG_CRC32 = 1U << 0;
 static constexpr size_t STREAM_CHUNK_BYTES = 4096;
 
@@ -522,7 +522,9 @@ String PsramLogger::buildMetadataJson() const {
   json += "\"mekf_gyro_y_scale\":" + String(Config::MEKF_GYRO_Y_SCALE, 6) + ",";
   json += "\"mekf_gyro_y_scale_role\":\"pre_prediction_sensor_calibration_not_output_angle_scaling\",";
   json += "\"mekf_control_angle_reference\":\"measurement_start_zero_subtracted;used_by_autonomous_control_zero_cross_and_peak_detection\",";
-  json += "\"mekf_abs_angle_reference\":\"continuous_gravity_frame_no_per_run_zero_subtraction;preferred_for_video_comparison\",";
+  json += "\"mekf_abs_angle_reference\":\"continuous_gravity_frame_no_per_run_zero_subtraction;preferred_for_absolute_estimator_diagnostics\",";
+  json += "\"mekf_detector_relative_reference\":\"predicted_MEKF_at_each_sample_minus_predicted_MEKF_at_measurement_start;initial_upright_pose_is_zero;used_directly_for_autonomous_peak_and_zero_cross_timing\",";
+  json += "\"mekf_detector_zero_role\":\"timing_reference_only;never_resets_MEKF_state_and_never_defines_energy_peak_amplitude\",";
   json += "\"madgwick_dynamic_abs_reference\":\"continuous_bias_corrected_dynamic_hold073_filter;online_comparison_only\",";
   json += "\"mekf_accel_rejection\":\"adaptive_R_from_accel_norm_and_predicted_gravity_direction;skip_below_min_confidence\",";
   json += "\"mekf_accel_mag_full_g\":" + String(Config::MEKF_ACCEL_MAG_FULL_G, 4) + ",";
@@ -1599,7 +1601,8 @@ String PsramLogger::buildMetadataJson() const {
   json += "\"imu_update_dt_us\",\"imu_sample_age_us\",\"mekf_accel_used\",\"attitude_filter_adopted\",";
   json += "\"pitch_mekf_start_sync_relative_deg\",\"pitch_mekf_measurement_relative_deg\",\"pitch_mekf_trial_relative_deg\",";
   json += "\"mekf_start_sync_zero_abs_deg\",\"mekf_measurement_zero_abs_deg\",\"mekf_trial_zero_abs_deg\",";
-  json += "\"mekf_start_sync_zero_sample_us\",\"mekf_measurement_zero_sample_us\",\"mekf_trial_zero_sample_us\"]}";
+  json += "\"mekf_start_sync_zero_sample_us\",\"mekf_measurement_zero_sample_us\",\"mekf_trial_zero_sample_us\",";
+  json += "\"pitch_mekf_detector_relative_deg\",\"mekf_detector_zero_predicted_abs_deg\",\"mekf_detector_zero_sample_us\"]}";
   const String final_size_key = ",\"metadata_json_final_bytes\":";
   size_t final_size = json.length() + final_size_key.length() + 2U;
   for (uint8_t i = 0; i < 4; ++i) {
