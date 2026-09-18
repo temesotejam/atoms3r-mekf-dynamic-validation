@@ -25,7 +25,7 @@
       1 ms読出し処理、ホスト取得間隔、2 ms電流監査も別々に集計します。電流監査は1 msごとに読出し機会を作り、同じループでの重複CURRENT_READBACKを省きます。
       完走や平均値だけをもって時間内と判定しません。実機での達成は未確認です。</p>
       <p>この版はFIFOではありません。ホスト間隔の厳密な2.5 ms一定や、センサ内部の全サンプル無欠落は保証しません。
-      <a href="https://github.com/temesotejam/atoms3r-mekf-dynamic-validation/blob/main/docs/V46U_TIMING.md">時間の定義・変更範囲・判定条件</a></p>
+      <a href="https://github.com/temesotejam/atoms3r-mekf-dynamic-validation/blob/main/docs/V46V_DEADLINE_TIGHTENING.md">時間の定義・変更範囲・判定条件</a></p>
     </section>
     <section class="panel important">
       <h2>V46v / 0.46.21：電流記録の時刻整合を修正</h2>
