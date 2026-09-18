@@ -80,7 +80,7 @@ static constexpr float CURRENT_ROLL_TARGET_MAX_DEG = 18.0f;
 static constexpr char CURRENT_ROLL_UI_REVISION[] = "current_roll_static_ui_v1_20260828";
 
 // V46g high-rate BMI270 schedule. Exact timing is microsecond-based.
-static constexpr uint32_t IMU_POLL_PERIOD_US = 500UL;  // V46x: poll at 2 kHz to reduce data-ready discovery latency.
+static constexpr uint32_t IMU_POLL_PERIOD_US = 1000UL;  // V46y frozen IMU host polling specification.
 static constexpr uint32_t BMI270_I2C_HZ = 1000000UL;  // BMI270 Fast-mode Plus maximum.
 static constexpr uint16_t IMU_PERIOD_MS = 2;  // legacy integer RWLOG header field only
 static constexpr uint16_t BMI270_GYRO_ODR_HZ = 400;
@@ -111,7 +111,7 @@ static constexpr uint32_t MADGWICK_SETTLING_MS = 5000UL;
 // Dedicated manual-release capture. The first window is held static by the
 // operator; it is metadata, not a per-run angle-zero operation.
 static constexpr char PASSIVE_CAPTURE_FIRMWARE_REVISION[] = "energy_control_autonomous_v7_side_response_correction_20260904";
-static constexpr char ATTITUDE_VALIDATION_REVISION[] = "v46x_imu_poll_500us_20260918";
+static constexpr char ATTITUDE_VALIDATION_REVISION[] = "v46y_frozen_imu_1ms_20260918";
 static constexpr float MEKF_GYRO_Y_SCALE = 0.908911f;
 static constexpr uint32_t PASSIVE_CAPTURE_DURATION_MS = 60000UL;
 static constexpr uint32_t PASSIVE_STATIC_WINDOW_MS = 3000UL;
