@@ -58,6 +58,9 @@ bool ImuManager::initializeSensorAttempt() {
     last_error_ = "unexpected_imu_type_not_bmi270";
     return false;
   }
+  // V46v timing-only change: BMI270 supports Fast-mode Plus up to 1 MHz.
+  // Keep the same internal bus, axes, ODR and estimator path; only shorten transfers.
+  M5.Imu.setClock(Config::BMI270_I2C_HZ);
   auto* dev = M5.Imu.getImuInstancePtr(0);
   if (!dev) { last_error_ = "bmi270_instance_missing"; return false; }
   // Library begin() alone is insufficient: also check BMI270 initialization
