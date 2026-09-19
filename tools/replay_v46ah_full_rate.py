@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Replay recorded decisions with V46ah; no future motion or hardware is simulated."""
+"""Replay recorded decisions with the frozen V46ah helper; no future motion or hardware is simulated."""
 import argparse
 import csv
 import json
@@ -48,7 +48,7 @@ def main():
         driver = driver.replace('const float target=energyControlPotentialJ(',
                                 'const float target=use_recorded_target ? r.corrected_target_energy_j : energyControlPotentialJ(')
         (p/'replay.cpp').write_text(driver)
-        source = '#define main retained_main\n#include "replay.cpp"\n#undef main\n#include "rate_baseline_correction.h"\n'
+        source = '#define main retained_main\n#include "replay.cpp"\n#undef main\n#include "v46ah_rate_baseline_frozen.h"\n'
         source += 'int main(){ int side,direction; unsigned vbat; while(std::cin>>side>>direction>>vbat){ Model m; m.r.physical_side=side; m.r.command_direction=direction; m.r.model_vbat_mV=vbat;\n'
         for field in retained.FLOAT_FIELDS:
             source += ' {uint32_t b; if(!(std::cin>>b))return 2; memcpy(&m.r.'+field+',&b,4);}\n'
@@ -77,7 +77,7 @@ def main():
         cpp = p/'full_rate.cpp'; cpp.write_text(source)
         binary = p/'full_rate'
         subprocess.run(['g++','-std=c++17','-O2','-ffp-contract=off','-Wall','-Wextra','-Werror',
-                        '-I'+str(ROOT/'tools/host_v46o'),'-I'+str(ROOT/'src'),str(cpp),'-o',str(binary)],check=True)
+                        '-I'+str(ROOT/'tools/host_v46o'),'-I'+str(ROOT/'tools/fixtures'),'-I'+str(ROOT/'src'),str(cpp),'-o',str(binary)],check=True)
         lines = subprocess.run([str(binary)],input='\n'.join(inputs)+'\n',capture_output=True,text=True,check=True).stdout.splitlines()
     assert len(lines) == len(records)
     for row,line in zip(records,lines):

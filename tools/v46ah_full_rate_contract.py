@@ -5,6 +5,8 @@ helper test. No old checksum or V46ag integration delta is changed here.
 """
 
 def normalize_v46ah(text: str, path: str) -> str:
+    from v46ai_rate_only_contract import normalize_v46ai
+    text = normalize_v46ai(text, path)
     if path != 'src/config.h':
         return text
     old = 'static constexpr char ATTITUDE_VALIDATION_REVISION[] = "v46ag_rate_baseline_20260919";'

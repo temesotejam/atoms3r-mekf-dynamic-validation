@@ -397,7 +397,7 @@ private:
                                          int8_t direction, uint16_t pulse_width_ms);
   bool beginEnergyControlAutonomousStartKickPulse(uint32_t now_ms, int8_t direction);
   float energyControlPotentialJ(float amplitude_deg) const;
-  float energyControlAutonomousFreeNextPeakAmplitude(float amplitude_deg) const;
+  // V46ai: no previous-amplitude free-peak method.
   float energyControlAutonomousGainForSide(int8_t physical_side) const;
   void energyControlAutonomousCorrectionParameters(int8_t physical_side,
                                                     float* c_side_used_deg,

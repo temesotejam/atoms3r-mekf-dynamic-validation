@@ -23,7 +23,7 @@ def block(text, signature):
 
 names = ['void resetEnergyControlAutonomousPeakTracker', 'void updateEnergyControlAutonomousMotion',
          'void updateEnergyControlAutonomousPeakTracker', 'bool recordEnergyControlAutonomousPeak',
-         'float energyControlPotentialJ', 'float energyControlAutonomousFreeNextPeakAmplitude',
+         'float energyControlPotentialJ',
          'float energyControlAutonomousGainForSide', 'void energyControlAutonomousCorrectionParameters',
          'float energyControlAutonomousCorrectedPrediction']
 methods = '\n'.join(block(runner, name.replace(' ', ' ExperimentRunner::', 1)).replace('ExperimentRunner::', '')
@@ -44,7 +44,8 @@ for token in ['no_delay_projection;no_output_scaling', 'live_MEKF_bias',
 # Trace the tested peak amplitude through the real downstream feedforward path.
 zero = block(runner, 'void ExperimentRunner::updateEnergyControlAutonomousAtZeroCross')
 assert 'event.previous_peak_amplitude_deg = energy_control_autonomous_last_peak_amplitude_deg_' in zero
-assert 'energyControlAutonomousFreeNextPeakAmplitude(\n      energy_control_autonomous_last_peak_amplitude_deg_)' in zero
+assert 'energyControlAutonomousFreeNextPeakAmplitude' not in runner + header
+assert 'rate_baseline::evaluate(\n      event.zero_cross_abs_rate_dps, event.physical_next_peak_side)' in zero
 assert 'Config::Q1_SHADOW_RATE_SUPPORT_MIN_DPS * Config::MEKF_GYRO_Y_SCALE' in zero
 source = r'''
 #include <cassert>
@@ -54,6 +55,7 @@ source = r'''
 #include <vector>
 #include "config.h"
 #include "autonomous_timing_compensation.h"
+#include "rate_baseline_correction.h"
 using std::isfinite;
 struct ImuReading { float gy_dps=0; uint32_t last_gyro_update_us=0; };
 struct Imu { ImuReading sample; const ImuReading& reading()const{return sample;} };
@@ -111,7 +113,7 @@ int main(){
     close(f.r.energy_control_autonomous_last_peak_amplitude_deg_,8);
     assert(f.r.energy_control_autonomous_half_cycle_state_==Half::WAIT_ZERO_CROSS);
   }
-  // V46ah: after a zero-width decision, the projected angle has crossed but
+  // V46ai: after a zero-width decision, the projected angle has crossed but
   // the posterior can remain on the previous side for several samples.
   // It must never seed the next extremum on that previous side.
   for(float delay:{0.f,3.f,6.f,9.f})for(int side:{-1,1}) {
@@ -168,13 +170,13 @@ int main(){
     if(field==2)f.r.status_.pitch_mekf_detector_relative_deg=NAN;
     f.r.updateEnergyControlAutonomousMotion(5);assert(f.r.stops==1&&f.r.energy_control_autonomous_phase_==Phase::STOP);}
   // Actual model functions: no legacy residual remains on either side.
-  {Fixture f;for(int side:{-1,1})for(float a:{4.f,8.f,12.f})for(float q:{0.f,1.f,8.f}){
+  {Fixture f;for(int side:{-1,1})for(float rate:{0.f,20.f,65.f,85.f})for(float q:{0.f,1.f,8.f}){
     float c=NAN,g=NAN,residual=NAN;f.r.energyControlAutonomousCorrectionParameters(side,&c,&g);
     close(c,0);close(g,f.r.energyControlAutonomousGainForSide(side));
-    float free=f.r.energyControlAutonomousFreeNextPeakAmplitude(a);assert(free>=0&&free<a);
+    float free=rate_baseline::evaluate(rate,side).adjusted_deg;assert(free>=0);
     close(f.r.energyControlAutonomousCorrectedPrediction(free,side,q,&residual),free+g*q);close(residual,0);
   }}
-  std::cout<<"V46ah native MEKF peak/rate/error-feedback: both sides, 4 delays, bias/time independence, duplicate samples, pulse suppression, zero-output expected-side rearm, nonfinite ESTOP, base-model path PASS\n";
+  std::cout<<"V46ai native MEKF peak/rate/error-feedback: both sides, 4 delays, bias/time independence, duplicate samples, pulse suppression, zero-output expected-side rearm, nonfinite ESTOP, base-model path PASS\n";
 }
 '''
 for key,value in {'EVENT':event,'ENUMS':enums,'FIELDS':fields,'METHODS':methods}.items():
