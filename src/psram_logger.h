@@ -337,6 +337,10 @@ class PsramLogger {
     bool side_mismatch_diagnostic = false;
     uint8_t phase = 0;
     float free_next_peak_amplitude_deg = NAN;
+    float p1_free_peak_before_rate_deg = NAN;
+    float rate_baseline_peak_deg = NAN;
+    float rate_baseline_correction_deg = 0.0f;
+    uint8_t rate_baseline_reason = 255;
     float passive_energy_j = NAN;
     float target_peak_deg = NAN;
     float target_energy_j = NAN;

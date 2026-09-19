@@ -1,4 +1,5 @@
 #include "experiment_runner.h"
+#include "rate_baseline_correction.h"
 
 #include <math.h>
 
@@ -2797,6 +2798,17 @@ void ExperimentRunner::updateEnergyControlAutonomousAtZeroCross(uint32_t t_test_
   const uint32_t v46l_free_model_t0_us = micros();
   event.free_next_peak_amplitude_deg = energyControlAutonomousFreeNextPeakAmplitude(
       energy_control_autonomous_last_peak_amplitude_deg_);
+  // V46ag: retain the raw P1 prediction and record the exact baseline used by
+  // the unchanged width selector. First 10 s and other settings keep V46af.
+  const auto baseline = rate_baseline::evaluate(event.free_next_peak_amplitude_deg,
+      event.zero_cross_abs_rate_dps, event.physical_next_peak_side,
+      event.previous_peak_amplitude_deg, event.target_peak_deg, t_test_ms,
+      autonomous_timing_.runUs());
+  event.p1_free_peak_before_rate_deg = baseline.p1_deg;
+  event.rate_baseline_peak_deg = baseline.rate_deg;
+  event.rate_baseline_correction_deg = baseline.correction_deg;
+  event.rate_baseline_reason = static_cast<uint8_t>(baseline.reason);
+  event.free_next_peak_amplitude_deg = baseline.adjusted_deg;
   const uint32_t v46l_free_model_us = static_cast<uint32_t>(micros() - v46l_free_model_t0_us);
   // V46s audit begin
   audit.free_model_us = v46l_free_model_us;

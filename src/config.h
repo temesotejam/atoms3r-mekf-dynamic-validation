@@ -120,7 +120,7 @@ static constexpr uint32_t MADGWICK_SETTLING_MS = 5000UL;
 // Dedicated manual-release capture. The first window is held static by the
 // operator; it is metadata, not a per-run angle-zero operation.
 static constexpr char PASSIVE_CAPTURE_FIRMWARE_REVISION[] = "energy_control_autonomous_v7_side_response_correction_20260904";
-static constexpr char ATTITUDE_VALIDATION_REVISION[] = "v46af_mekf_peak_side_20260919";
+static constexpr char ATTITUDE_VALIDATION_REVISION[] = "v46ag_rate_baseline_20260919";
 static constexpr float MEKF_GYRO_Y_SCALE = 0.908911f;
 static constexpr uint32_t PASSIVE_CAPTURE_DURATION_MS = 60000UL;
 static constexpr uint32_t PASSIVE_STATIC_WINDOW_MS = 3000UL;

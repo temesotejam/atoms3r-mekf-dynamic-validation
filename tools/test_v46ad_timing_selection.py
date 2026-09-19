@@ -165,4 +165,4 @@ with tempfile.TemporaryDirectory() as d:
         assert row['autonomous_control_prediction_enabled']==(ms>0),row
         assert 'autonomous_timing_compensation_us*1e-6' in row['autonomous_timing_prediction_formula']
 subprocess.run(['node',str(ROOT/'tools/test_v46ad_timing_ui.js')],check=True)
-print('V46af PASS: 0/3/6/9 ms; stopped-state guards; run/metadata immutability; zero bypass; HTTP ownership/start handshake; UI races')
+print('V46ag PASS: 0/3/6/9 ms; stopped-state guards; run/metadata immutability; zero bypass; HTTP ownership/start handshake; UI races')

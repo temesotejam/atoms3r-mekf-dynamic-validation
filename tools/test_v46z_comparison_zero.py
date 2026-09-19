@@ -14,7 +14,7 @@ runner = (SRC / "experiment_runner.cpp").read_text(encoding="utf-8")
 log_types = (SRC / "log_types.h").read_text(encoding="utf-8")
 logger = (SRC / "psram_logger.cpp").read_text(encoding="utf-8")
 
-assert "v46af_mekf_peak_side_20260919" in config
+assert "v46ag_rate_baseline_20260919" in config
 assert "IMU_POLL_PERIOD_US = 1000UL" in config
 assert "BMI270_GYRO_ODR_HZ = 400" in config
 assert "BMI270_ACCEL_ODR_HZ = 200" in config
