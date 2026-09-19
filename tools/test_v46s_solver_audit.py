@@ -29,7 +29,7 @@ def main():
     assert 'audit_psram_allocation_failed' in logger
     assert 'legacy_exhaustive_solver_controls_motor' not in logger
     assert 'runEnergyControlAutonomousSolverShadow();' not in original_runner()
-    print('PASS: physical controller byte-identical after removing audit-only markers; IMU/motor/MEKF/log layout unchanged')
+    print('PASS: retained baseline after reversing explicit migration/audit hunks; IMU/motor/MEKF/log layout unchanged')
     with tempfile.TemporaryDirectory() as td:
         td=Path(td);binary=build_driver(td)
         driver=td/'audit_test.cpp'

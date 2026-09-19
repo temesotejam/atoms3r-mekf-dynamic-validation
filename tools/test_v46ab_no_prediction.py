@@ -5,7 +5,7 @@ ROOT = Path(__file__).resolve().parents[1]
 runner = (ROOT / "src/experiment_runner.cpp").read_text(encoding="utf-8")
 config = (ROOT / "src/config.h").read_text(encoding="utf-8")
 
-assert "v46ad_delay_compensation_sweep_20260919" in config
+assert "v46ae_mekf_amplitude_20260919" in config
 
 def method(name: str) -> str:
     start = runner.index(name)
@@ -28,4 +28,4 @@ assert "if (energy_control_autonomous_mode_)" in filter_series
 assert "raw_mekf_predicted_abs_deg_ = NAN;" in filter_series
 assert "mekf_.predictEulerDeg" in filter_series
 
-print("V46ad PASS: heavy quaternion forward prediction is not used by Autonomous timing")
+print("V46ae PASS: heavy quaternion forward prediction is not used by Autonomous timing")

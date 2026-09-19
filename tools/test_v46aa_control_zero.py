@@ -9,7 +9,7 @@ logger = (ROOT / "src/psram_logger.cpp").read_text(encoding="utf-8")
 config = (ROOT / "src/config.h").read_text(encoding="utf-8")
 converter = (ROOT / "tools/convert_rwlog_to_csv.py").read_text(encoding="utf-8")
 
-assert "v46ad_delay_compensation_sweep_20260919" in config
+assert "v46ae_mekf_amplitude_20260919" in config
 assert "IMU_POLL_PERIOD_US = 1000UL" in config
 assert "BMI270_GYRO_ODR_HZ = 400" in config
 assert "BMI270_ACCEL_ODR_HZ = 200" in config
@@ -46,11 +46,11 @@ assert "const float detector_relative_angle_deg = status_.pitch_mekf_detector_re
 assert "pitch_mekf_predicted_abs_deg" not in motion
 assert "raw_mekf_predicted_abs_deg_" not in motion
 
-# Energy amplitude stays on the gyro-integral coordinate.
-assert "energy_control_autonomous_gyro_relative_deg_" in motion
-assert "ENERGY_CONTROL_AUTONOMOUS_GYRO_TO_VIDEO_PEAK_SCALE" in motion
+# V46ae amplitude uses the unprojected measurement-relative posterior.
+assert "energy_control_autonomous_gyro_relative_deg_" not in motion
+assert "pitch_mekf_measurement_relative_deg" in motion
 
-assert "RWLOG_FORMAT_VERSION = 50" in logger
+assert "RWLOG_FORMAT_VERSION = 51" in logger
 assert "sizeof(LogSample) == 258" in log_types
 assert 'SAMPLE_FORMAT_V49 = SAMPLE_FORMAT_V48' in converter
 assert "autonomous_control_prediction_enabled" in logger

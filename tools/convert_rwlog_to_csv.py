@@ -33,6 +33,8 @@ SAMPLE_FORMAT_V48 = SAMPLE_FORMAT_V47 + "hhI"
 SAMPLE_FORMAT_V49 = SAMPLE_FORMAT_V48
 # v50 adds lightweight 3 ms delay compensation; binary layout is unchanged.
 SAMPLE_FORMAT_V50 = SAMPLE_FORMAT_V49
+# v51 changes Autonomous amplitude/rate semantics, not the binary sample layout.
+SAMPLE_FORMAT_V51 = SAMPLE_FORMAT_V50
 HEADER_FIELDS = [
     "magic",
     "format_version",
@@ -280,6 +282,7 @@ CSV_COLUMNS_V48 = CSV_COLUMNS_V47 + [
 ]
 CSV_COLUMNS_V49 = CSV_COLUMNS_V48
 CSV_COLUMNS_V50 = CSV_COLUMNS_V49
+CSV_COLUMNS_V51 = CSV_COLUMNS_V50
 CSV_COLUMNS_V33 = CSV_COLUMNS_COMMON_PREFIX + [
     "trial_predicted_beta_min", "beta_recovery_tau_s", "beta_model_vbat_mV", "predicted_i_goal_mA", "predicted_peak_current_mA", "beta_model_vbat_status",
     "beta_ceiling_fixed", "beta_ceiling_dynamic_hold073", "beta_ceiling_dynamic_hold120", "beta_ceiling_dynamic_hold170",
@@ -1022,8 +1025,8 @@ def write_energy_control_autonomous_events(metadata: dict, out_dir: Path) -> tup
 def convert(path: Path, out_dir: Path) -> None:
     data = path.read_bytes()
     header = parse_header(data)
-    if header["format_version"] not in (23, 24, 25, 26, 27, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50):
-        raise ValueError(f"this converter expects rwlog format v23-v27, v29-v50, got v{header['format_version']}")
+    if header["format_version"] not in (23, 24, 25, 26, 27, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51):
+        raise ValueError(f"this converter expects rwlog format v23-v27, v29-v51, got v{header['format_version']}")
     sample_format = sample_format_for_version(header["format_version"])
     if header["log_sample_size"] != struct.calcsize(sample_format):
         raise ValueError("unexpected sample size")

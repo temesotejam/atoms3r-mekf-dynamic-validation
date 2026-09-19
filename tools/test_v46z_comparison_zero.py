@@ -14,7 +14,7 @@ runner = (SRC / "experiment_runner.cpp").read_text(encoding="utf-8")
 log_types = (SRC / "log_types.h").read_text(encoding="utf-8")
 logger = (SRC / "psram_logger.cpp").read_text(encoding="utf-8")
 
-assert "v46ad_delay_compensation_sweep_20260919" in config
+assert "v46ae_mekf_amplitude_20260919" in config
 assert "IMU_POLL_PERIOD_US = 1000UL" in config
 assert "BMI270_GYRO_ODR_HZ = 400" in config
 assert "BMI270_ACCEL_ODR_HZ = 200" in config
@@ -76,11 +76,11 @@ control = "\n".join(method(name) for name in (
     "bool ExperimentRunner::beginEnergyControlAutonomousPulse",
     "bool ExperimentRunner::beginEnergyControlAutonomousStartKickPulse",
 ))
-for token in ("pitch_mekf_start_sync_relative_deg", "pitch_mekf_measurement_relative_deg",
-              "pitch_mekf_trial_relative_deg"):
+assert "pitch_mekf_measurement_relative_deg" in control
+for token in ("pitch_mekf_start_sync_relative_deg", "pitch_mekf_trial_relative_deg"):
     assert token not in control, token
 
-assert "RWLOG_FORMAT_VERSION = 50" in logger
+assert "RWLOG_FORMAT_VERSION = 51" in logger
 assert "sizeof(LogSample) == 258" in log_types
 assert struct.calcsize(converter.SAMPLE_FORMAT_V47) == 250
 # The converter has derived/display CSV columns, so binary field count is not
