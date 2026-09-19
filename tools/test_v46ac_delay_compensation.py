@@ -6,7 +6,7 @@ runner = (ROOT / "src/experiment_runner.cpp").read_text(encoding="utf-8")
 config = (ROOT / "src/config.h").read_text(encoding="utf-8")
 logger = (ROOT / "src/psram_logger.cpp").read_text(encoding="utf-8")
 
-assert "v46ac_light_delay_compensation_20260918" in config
+assert "v46ad_delay_compensation_sweep_20260919" in config
 assert "ENERGY_CONTROL_AUTONOMOUS_TIMING_COMPENSATION_US = 3000UL" in config
 
 display = runner[
@@ -15,7 +15,7 @@ display = runner[
 ]
 for token in (
     "(r.gy_dps - status_.mekf_bias_y_dps) * Config::MEKF_GYRO_Y_SCALE",
-    "Config::ENERGY_CONTROL_AUTONOMOUS_TIMING_COMPENSATION_US",
+    "autonomous_timing_.runUs()",
     "status_.pitch_mekf_measurement_relative_deg + mekf_pitch_rate_dps * compensation_s",
     "status_.pitch_mekf_deg = status_.pitch_mekf_detector_relative_deg",
 ):
@@ -50,4 +50,4 @@ for token in (
 assert "RWLOG_FORMAT_VERSION = 50" in logger
 assert "lightweight_scalar_delay_compensation" in logger
 assert "autonomous_timing_compensation_us" in logger
-print("V46ac lightweight 3 ms delay compensation guards PASS")
+print("V46ac lightweight delay compensation guards PASS")
