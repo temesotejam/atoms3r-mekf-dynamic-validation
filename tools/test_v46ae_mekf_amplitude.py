@@ -111,6 +111,35 @@ int main(){
     close(f.r.energy_control_autonomous_last_peak_amplitude_deg_,8);
     assert(f.r.energy_control_autonomous_half_cycle_state_==Half::WAIT_ZERO_CROSS);
   }
+  // V46af: after a zero-width decision, the projected angle has crossed but
+  // the posterior can remain on the previous side for several samples.
+  // It must never seed the next extremum on that previous side.
+  for(float delay:{0.f,3.f,6.f,9.f})for(int side:{-1,1}) {
+    Fixture f;f.clock=1000000;
+    f.r.energy_control_autonomous_phase_=Phase::ENERGY_CONTROL;
+    f.r.energy_control_autonomous_last_accepted_zero_cross_valid_=true;
+    f.r.energy_control_autonomous_last_accepted_zero_cross_ms_=1000;
+    f.r.energy_control_autonomous_pending_peak_=true;
+    f.r.energy_control_autonomous_pending_next_side_=side;
+    f.r.energy_control_autonomous_pending_q_command_mA_s_=0;
+    if(delay>0) {
+      f.sample(-side*.10f,side*60.f,delay);
+      assert(!f.r.energy_control_autonomous_peak_tracker_started_);
+      assert(f.log.peaks.empty());
+    }
+    f.sample(side*.05f,side*60.f,delay);
+    assert(f.r.energy_control_autonomous_candidate_detector_side_==side);
+    f.clock=1200000;
+    f.sample(side*7.9f,side*2.f,delay);f.sample(side*8.f,side*.5f,delay);
+    f.sample(side*7.99f,-side*1.f,delay);
+    f.sample(side*7.98f,-side*2.f,delay);
+    f.sample(side*7.97f,-side*3.f,delay);
+    assert(f.log.peaks.size()==1);
+    const auto& e=f.log.peaks[0];assert(e.physical_peak_side==side);
+    assert(e.pending_command_matched);close(e.pending_q_command_mA_s,0);
+    close(e.peak_amplitude_deg,8);
+    assert(f.r.energy_control_autonomous_half_cycle_state_==Half::WAIT_ZERO_CROSS);
+  }
   // Real peak-error feedback uses MEKF amplitude; startup bias magnitude and
   // elapsed run time must not introduce an accumulated-angle offset.
   for(float bias:{-20.f,0.f,20.f})for(int side:{-1,1}){
@@ -145,7 +174,7 @@ int main(){
     float free=f.r.energyControlAutonomousFreeNextPeakAmplitude(a);assert(free>=0&&free<a);
     close(f.r.energyControlAutonomousCorrectedPrediction(free,side,q,&residual),free+g*q);close(residual,0);
   }}
-  std::cout<<"V46ae native MEKF peak/rate/error-feedback: both sides, 4 delays, bias/time independence, duplicate samples, pulse suppression, nonfinite ESTOP, base-model path PASS\n";
+  std::cout<<"V46af native MEKF peak/rate/error-feedback: both sides, 4 delays, bias/time independence, duplicate samples, pulse suppression, zero-output expected-side rearm, nonfinite ESTOP, base-model path PASS\n";
 }
 '''
 for key,value in {'EVENT':event,'ENUMS':enums,'FIELDS':fields,'METHODS':methods}.items():
