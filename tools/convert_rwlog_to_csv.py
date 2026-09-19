@@ -984,6 +984,8 @@ ENERGY_CONTROL_AUTONOMOUS_ZERO_CROSS_COLUMNS = [
     "zero_cross_abs_rate_dps", "previous_peak_time_ms", "previous_peak_side",
     "previous_peak_amplitude_deg", "physical_next_peak_side", "phase",
     "free_next_peak_amplitude_deg", "free_model_revision", "passive_energy_j",
+    "p1_free_peak_before_rate_deg", "rate_baseline_peak_deg",
+    "rate_baseline_correction_deg", "rate_baseline_reason",
     "target_peak_deg", "target_energy_j", "delta_energy_required_j",
     "q1_gain_deg_per_mA_s", "q_ff_energy_mA_s", "q_angle_diagnostic_mA_s",
     "integral_side_mA_s", "q_unclamped_mA_s", "q_command_mA_s",

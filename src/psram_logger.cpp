@@ -472,7 +472,7 @@ String PsramLogger::buildMetadataJson() const {
   json += "\"min_zero_to_peak_ms\":" + String(Config::ENERGY_CONTROL_AUTONOMOUS_MIN_ZERO_TO_PEAK_MS) + ",";
   json += "\"events_accepted_during_pulse\":false,";
   json += "\"autonomous_duration_ms\":" + String(Config::ENERGY_CONTROL_AUTONOMOUS_DURATION_MS) + ",";
-  json += "\"energy_control_autonomous_free_model\":\"F_s(A)=U_P1_inverse(0.8706716644111074*U_P1(A)-0J);A_is_abs_uncompensated_MEKF_measurement_relative_peak_deg;F_plus_equals_F_minus;P1_20260828\",";
+  json += "\"energy_control_autonomous_free_model\":\"F_s(A)=U_P1_inverse(0.8706716644111074*U_P1(A)-0J);A_is_abs_uncompensated_MEKF_measurement_relative_peak_deg;raw_P1_plus_equals_minus;effective_baseline_adds_logged_rate_correction;P1_20260828\",";
   json += "\"energy_control_autonomous_peak_policy\":\"uncompensated_posterior_MEKF_extremum_plus_3_returning_MEKF_rate_samples;gyro_sign_change_alone_never_generates_peak;candidate_events_during_pulse_never_accepted;pending_peak_tracks_expected_side_only;no_peak_rate_or_amplitude_minimum\",";
   json += "\"energy_control_autonomous_target_peak_deg\":" + String(control_target_cdeg_ / 100.0f, 3) + ",";
   json += "\"energy_control_autonomous_target_choices_deg\":\"8.0,10.0,12.0\",";
@@ -480,7 +480,13 @@ String PsramLogger::buildMetadataJson() const {
   json += "\"energy_control_autonomous_startup_pump\":false,";
   json += "\"energy_control_autonomous_peak_coordinate\":\"A=abs(pitch_mekf_measurement_relative_deg_at_posterior_extremum);measurement_start_reference;no_delay_projection;no_output_scaling\",";
   json += "\"energy_control_autonomous_rate_coordinate\":\"(gy_dps-mekf_bias_y_dps)*mekf_gyro_y_scale;live_MEKF_bias;historical_Q1_rate_support_rescaled\",";
-  json += "\"energy_control_autonomous_model_coordinate_status\":\"P1_and_base_Q1_retained_for_MEKF_validation;legacy_gyro_fit_disabled;v46ae_first_run_evaluated;v46af_peak_side_fix_validation_pending\",";
+  json += "\"energy_control_autonomous_model_coordinate_status\":\"P1_and_base_Q1_retained_for_MEKF_validation;legacy_gyro_fit_disabled;v46af_peak_fix_measured_70of70;v46ag_partial_rate_baseline_hardware_validation_pending\",";
+  json += "\"rate_baseline_revision\":\"v46ag_rate_baseline_25pct_20260919\",";
+  json += "\"rate_baseline_policy\":\"target8_delay3ms_after10s_supported_state_only;P1_plus_0p25_rate_baseline_difference_clipped_0p5deg;Q_gains_unchanged;all_other_conditions_P1\",";
+  json += "\"rate_baseline_formula\":\"A_rate_plus=7.217460941+0.286814471*(abs_rate-65);A_rate_minus=8.399746959+0.130807354*(abs_rate-65);A_next=A_baseline+g_side*Q\",";
+  json += "\"rate_baseline_state_gate\":\"next_plus:previous_peak8p3to9p8_rate61p5to72;next_minus:previous_peak6p7to9_rate59to70;inclusive\",";
+  json += "\"rate_baseline_reason_codes\":\"0=applied,1=first10s,2=other_target_or_delay,3=outside_state,4=nonfinite,255=not_evaluated\",";
+  json += "\"rate_baseline_fit_source\":\"d170_and_8cde_10to30s;run_separated_prediction_validation;not_independent_Q_gain_identification\",";
   json += "\"energy_control_autonomous_zero_cross_detector\":\"posterior_measurement_relative_plus_run_delay_projection;projection_only_for_zero_cross;one_consumed_cross_per_accepted_peak\",";
   json += "\"energy_control_autonomous_side_policy\":\"next_side_from_interpolated_rate;peak_side_mismatch_logged_diagnostic_only\",";
   json += "\"energy_control_autonomous_integral_enable_rule\":\"every_accepted_peak;per_physical_peak_side;100ms_available_Q_antiwindup\",";
@@ -1512,6 +1518,10 @@ String PsramLogger::buildMetadataJson() const {
     detail += ",\"side_mismatch_diagnostic\":" + String(e.side_mismatch_diagnostic ? "true" : "false");
     detail += ",\"phase\":" + String(e.phase);
     appendAutonomousNullable("free_next_peak_amplitude_deg", e.free_next_peak_amplitude_deg, 5);
+    appendAutonomousNullable("p1_free_peak_before_rate_deg", e.p1_free_peak_before_rate_deg, 5);
+    appendAutonomousNullable("rate_baseline_peak_deg", e.rate_baseline_peak_deg, 5);
+    appendAutonomousNullable("rate_baseline_correction_deg", e.rate_baseline_correction_deg, 5);
+    detail += ",\"rate_baseline_reason\":" + String(e.rate_baseline_reason);
     detail += ",\"free_model_revision\":\"" + String(Config::ENERGY_CONTROL_AUTONOMOUS_FREE_MODEL_REVISION) + "\"";
     appendAutonomousNullable("passive_energy_j", e.passive_energy_j, 8);
     appendAutonomousNullable("target_peak_deg", e.target_peak_deg, 5);
@@ -1716,8 +1726,6 @@ bool PsramLogger::streamRwLog(WebServer& server) {
   last_error_ = ok ? "" : "rwlog_stream_failed";
   return ok;
 }
-
-
 
 
 

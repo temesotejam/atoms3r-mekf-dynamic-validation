@@ -4,24 +4,24 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#111827">
-  <title>AtomS3R V46af Fast Solver Motor Validation</title>
+  <title>AtomS3R V46ag Fast Solver Motor Validation</title>
   <link rel="stylesheet" href="styles.css">
   <script type="module" src="https://unpkg.com/esp-web-tools@10.1.1/dist/web/install-button.js?module"></script>
 </head>
 <body>
   <main class="shell">
     <header class="hero">
-      <p class="eyebrow">ATOMS3R / V46af / MOTOR-DRIVEN VALIDATION</p>
+      <p class="eyebrow">ATOMS3R / V46ag / MOTOR-DRIVEN VALIDATION</p>
       <h1>MEKF Motor Validation<br><span>Web Flasher</span></h1>
       <p class="lead">ピーク振幅と次のパルス計算をMEKFへ統一した測定版です。開始姿勢を0°とした角度を使い、ゼロクロスには3 msの遅延補償を適用します。</p>
       <div class="badges"><span>ESP32-S3</span><span>BMI270 400/200 Hz</span><span>RWLOG v51</span><span>MEKF amplitude</span><span>3 ms compensation</span></div>
     </header>
     <section class="panel important">
-      <h2>V46af / 0.46.31：無出力時のピーク追跡を修正</h2>
-      <p>V46aeの実測で見つかった、パルスを出さないときのピーク抜けを修正しました。MEKF角が次の振れ方向に入ってからピークを追跡します。</p>
+      <h2>V46ag / 0.46.32：角速度による予測補正を25%反映</h2>
+      <p>V46afでピーク抜けの解消を確認しました。この版では、最初の10秒は従来制御を使い、その後は測定範囲内で角速度による予測補正を25%反映します。補正は最大±0.5°です。</p>
       <p><strong>次の測定：遅延補償3 ms・目標8°・30秒。</strong>開始姿勢と撮影条件をそろえてください。起動時の補償は3 msです。各Run終了後、<strong>次の開始前にRWLOGと動画を保存</strong>してください。</p>
-      <p>300 mA・最大100 ms、起動パルス、非常停止、IMU取得、LED同期は維持しています。修正後のピーク検出と振幅制御を同じ条件で確認します。</p>
-      <p><a href="https://github.com/temesotejam/atoms3r-mekf-dynamic-validation/blob/main/docs/V46AF_PEAK_SIDE_FIX.md">今回の測定結果・修正内容・測定手順</a></p>
+      <p>300 mA・最大100 ms、起動パルス、非常停止、IMU取得、LED同期は維持しています。目標8°への振幅が改善するかを実機で確認する試験版です。</p>
+      <p><a href="https://github.com/temesotejam/atoms3r-mekf-dynamic-validation/blob/main/docs/V46AG_RATE_BASELINE.md">今回の測定結果・修正内容・測定手順</a></p>
       <p>公開ビルド：<code id="build-sha">取得中</code><br><a href="build-sha.txt">ビルドSHAを確認</a> / <a href="firmware/SHA256SUMS.txt">ファームウェアのSHA-256</a></p>
     </section>
 
@@ -29,7 +29,7 @@
       <h2>このページから直接書き込めます</h2>
       <p>AtomS3R を USB でPCへ接続し、Chrome または Edge のデスクトップ版で下のボタンを押してください。</p>
       <esp-web-install-button manifest="manifest.json">
-        <button slot="activate" class="primary">AtomS3RへV46afを書き込む</button>
+        <button slot="activate" class="primary">AtomS3RへV46agを書き込む</button>
         <span slot="unsupported" class="warning">このブラウザはWeb Serial / WebUSBに対応していません。PC版ChromeまたはEdgeを使用してください。</span>
       </esp-web-install-button>
       <details>
@@ -77,11 +77,11 @@
 
     <section class="panel safety">
       <h2>実機動作について</h2>
-      <p>このV46afはモータを実際に駆動します。可動部から手・ケーブル・治具を離し、異常時は実験画面の <strong>Emergency stop</strong> を使用してください。</p>
-      <p>Attitude revision: <code>v46af_mekf_peak_side_20260919</code></p>
+      <p>このV46agはモータを実際に駆動します。可動部から手・ケーブル・治具を離し、異常時は実験画面の <strong>Emergency stop</strong> を使用してください。</p>
+      <p>Attitude revision: <code>v46ag_rate_baseline_20260919</code></p>
     </section>
 
-    <footer>atoms3r-mekf-dynamic-validation / V46af</footer>
+    <footer>atoms3r-mekf-dynamic-validation / V46ag</footer>
   </main>
   <script>
     fetch('build-sha.txt', {cache: 'no-store'})

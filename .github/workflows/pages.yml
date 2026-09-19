@@ -20,7 +20,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Verify V46af timing and retained safety guards
+      - name: Verify V46ag timing and retained safety guards
         run: |
           set -euxo pipefail
           python tools/test_v46u_timing.py
@@ -37,6 +37,7 @@ jobs:
           python tools/test_v46ac_delay_compensation.py
           python tools/test_v46ad_timing_selection.py
           python tools/test_v46ae_mekf_amplitude.py
+          python tools/test_v46ag_rate_baseline.py
           g++ -std=c++11 -O2 tools/test_v46n_acquisition.cpp -o /tmp/test_acq
           /tmp/test_acq
           g++ -std=c++17 -O2 -Wall -Wextra -Werror -Itools/host_v46o tools/test_v46o_startup.cpp -o /tmp/test_v46o
@@ -46,11 +47,11 @@ jobs:
           g++ -std=c++17 -O2 tools/test_mekf_host.cpp src/mekf6.cpp -o /tmp/test_mekf
           /tmp/test_mekf
           python -m json.tool site/manifest.json >/dev/null
-          grep -q 'V46af / 0.46.31' site/index.html
-          grep -q 'v46af_mekf_peak_side_20260919' src/config.h
+          grep -q 'V46ag / 0.46.32' site/index.html
+          grep -q 'v46ag_rate_baseline_20260919' src/config.h
       - name: Install PlatformIO
         run: pip install platformio
-      - name: Build V46af firmware with verified BMI270 patch
+      - name: Build V46ag firmware with verified BMI270 patch
         run: |
           set -euxo pipefail
           pio pkg install -e atoms3cam
@@ -103,9 +104,9 @@ jobs:
                   if published != expected:
                       raise ValueError('Published build SHA differs: ' + published)
                   manifest = json.loads(get('manifest.json'))
-                  if manifest['version'] != '0.46.31':
+                  if manifest['version'] != '0.46.32':
                       raise ValueError('Unexpected firmware version')
-                  if 'V46af / 0.46.31' not in get('index.html').decode():
+                  if 'V46ag / 0.46.32' not in get('index.html').decode():
                       raise ValueError('Published page label differs')
                   provenance = json.loads(get('bmi270-build-patch.json'))
                   if provenance['upstream_git_blob'] != '41732382bbdfe413be758748bca24d9a15a3a1d8':

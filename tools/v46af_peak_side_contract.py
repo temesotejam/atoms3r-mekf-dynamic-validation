@@ -13,6 +13,8 @@ SIDE_GATE = """  // V46af: a compensated zero-cross can precede the posterior ze
 
 
 def normalize_v46af(text: str, path: str) -> str:
+    from v46ag_rate_baseline_contract import normalize_v46ag
+    text = normalize_v46ag(text, path)
     if path == "src/experiment_runner.cpp":
         anchor = "  if (detector_side == 0) return;\n"
         old = anchor + "  const float detector_abs_deg = fabsf(peak_relative_angle_deg);\n"

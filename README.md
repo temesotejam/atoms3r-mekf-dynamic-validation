@@ -1,17 +1,15 @@
-## Current firmware: V46af / 0.46.31 — MEKF peak-side fix
+## Current firmware: V46ag / 0.46.32 — 25% rate baseline correction
 
-[Web flasher](https://temesotejam.github.io/atoms3r-mekf-dynamic-validation/) · [今回の測定と修正](docs/V46AF_PEAK_SIDE_FIX.md) · [MEKF移行の採用経緯](docs/V46AE_MEKF_AMPLITUDE.md)
+[Web flasher](https://temesotejam.github.io/atoms3r-mekf-dynamic-validation/) · [予測候補・今回の実装・測定手順](docs/V46AG_RATE_BASELINE.md) · [ピーク追跡の修正](docs/V46AF_PEAK_SIDE_FIX.md)
 
-V46aeの実測d170で、無出力のゼロクロス後に負側ピークが3回抜けました。
-予測角が先にゼロを越え、補償前MEKFが旧側に残っている間にピーク候補を作る問題を再現しました。
-V46afは次の振れ方向に入ってから候補を追跡します。
+V46afの実測8cdeでは動画70ピークに対し制御も70ピークを記録しました。
+残る振幅ばらつきに対し、中央通過角速度による次ピーク予測を使う試験版です。
+最初の10秒は従来制御、その後、8°・3 ms・指定状態範囲で予測差の25%を最大±0.5°だけ反映します。
 
-Autonomousの振幅・目標誤差・P1/Q1入力は補償前MEKF、ゼロクロスは3 ms予測を維持します。
-P1・基本Q1・Ki・旧残差補正の無効化・出力上限はV46aeと同じです。
 **次の測定：3 ms・8°・30秒。** 各Run後、次の開始前にRWLOGと動画を保存してください。
-RWLOG v51の配置は同じで、revisionとピーク方針のmetadataが変わります。
-V46aeでは動画の目標8°に対するRMSEが0.797°で、旧3 msの0.361°より悪化しました。
-今回の修正だけで振幅精度まで改善するとはまだ確認していません。
+MEKF・ピーク追跡・3 ms補償・Qゲイン・Ki・出力上限は維持します。
+RWLOG v51の時系列配置は同じで、ゼロクロスイベントに補正前後の値と適用理由を追加しました。
+別Runの一段先予測で角速度式の有効性を確認しましたが、25%補正版の実機制御性能は未確認です。
 
 以下は過去の構成・検証の記録です。
 
