@@ -1,15 +1,14 @@
-## Current firmware: V46ag / 0.46.32 — 25% rate baseline correction
+## Current firmware: V46ah / 0.46.33 — direct rate baseline
 
-[Web flasher](https://temesotejam.github.io/atoms3r-mekf-dynamic-validation/) · [予測候補・今回の実装・測定手順](docs/V46AG_RATE_BASELINE.md) · [ピーク追跡の修正](docs/V46AF_PEAK_SIDE_FIX.md)
+[Web flasher](https://temesotejam.github.io/atoms3r-mekf-dynamic-validation/) · [今回の変更・測定手順](docs/V46AH_FULL_RATE_BASELINE.md) · [従来25%版](docs/V46AG_RATE_BASELINE.md)
 
-V46afの実測8cdeでは動画70ピークに対し制御も70ピークを記録しました。
-残る振幅ばらつきに対し、中央通過角速度による次ピーク予測を使う試験版です。
-最初の10秒は従来制御、その後、8°・3 ms・指定状態範囲で予測差の25%を最大±0.5°だけ反映します。
+角速度による次ピーク予測を100%採用し、従来P1との差を±0.5°に制限する処理を外した実測版です。
+目標8°・遅延補償3 ms・開始10秒以降・既存の状態範囲内で適用し、それ以外はP1を使います。
+MEKF、ピーク追跡、3 ms先読み、Qゲイン、Ki、300 mA・最大100 msは維持しています。
 
-**次の測定：3 ms・8°・30秒。** 各Run後、次の開始前にRWLOGと動画を保存してください。
-MEKF・ピーク追跡・3 ms補償・Qゲイン・Ki・出力上限は維持します。
-RWLOG v51の時系列配置は同じで、ゼロクロスイベントに補正前後の値と適用理由を追加しました。
-別Runの一段先予測で角速度式の有効性を確認しましたが、25%補正版の実機制御性能は未確認です。
+**次の測定：3 ms・8°・30秒。** 開始姿勢と撮影条件をそろえ、各Run終了後、次の開始前にRWLOGと動画を保存してください。
+既存2 Runの記録状態・Qを固定した予測は改善しました。100%・補正上限なしで運転した実機性能は、これから確認します。
+RWLOG v51の時系列配置とイベント項目を維持し、metadataで100%・補正上限なしを識別します。
 
 以下は過去の構成・検証の記録です。
 
