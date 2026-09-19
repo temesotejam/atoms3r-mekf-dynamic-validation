@@ -6,7 +6,7 @@ runner = (ROOT / "src/experiment_runner.cpp").read_text(encoding="utf-8")
 config = (ROOT / "src/config.h").read_text(encoding="utf-8")
 logger = (ROOT / "src/psram_logger.cpp").read_text(encoding="utf-8")
 
-assert "v46ag_rate_baseline_20260919" in config
+assert "v46ah_full_rate_baseline_20260919" in config
 assert "ENERGY_CONTROL_AUTONOMOUS_TIMING_COMPENSATION_US = 3000UL" in config
 
 display = runner[

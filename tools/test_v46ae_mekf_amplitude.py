@@ -111,7 +111,7 @@ int main(){
     close(f.r.energy_control_autonomous_last_peak_amplitude_deg_,8);
     assert(f.r.energy_control_autonomous_half_cycle_state_==Half::WAIT_ZERO_CROSS);
   }
-  // V46ag: after a zero-width decision, the projected angle has crossed but
+  // V46ah: after a zero-width decision, the projected angle has crossed but
   // the posterior can remain on the previous side for several samples.
   // It must never seed the next extremum on that previous side.
   for(float delay:{0.f,3.f,6.f,9.f})for(int side:{-1,1}) {
@@ -174,7 +174,7 @@ int main(){
     float free=f.r.energyControlAutonomousFreeNextPeakAmplitude(a);assert(free>=0&&free<a);
     close(f.r.energyControlAutonomousCorrectedPrediction(free,side,q,&residual),free+g*q);close(residual,0);
   }}
-  std::cout<<"V46ag native MEKF peak/rate/error-feedback: both sides, 4 delays, bias/time independence, duplicate samples, pulse suppression, zero-output expected-side rearm, nonfinite ESTOP, base-model path PASS\n";
+  std::cout<<"V46ah native MEKF peak/rate/error-feedback: both sides, 4 delays, bias/time independence, duplicate samples, pulse suppression, zero-output expected-side rearm, nonfinite ESTOP, base-model path PASS\n";
 }
 '''
 for key,value in {'EVENT':event,'ENUMS':enums,'FIELDS':fields,'METHODS':methods}.items():

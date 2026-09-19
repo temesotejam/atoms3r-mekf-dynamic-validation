@@ -480,9 +480,10 @@ String PsramLogger::buildMetadataJson() const {
   json += "\"energy_control_autonomous_startup_pump\":false,";
   json += "\"energy_control_autonomous_peak_coordinate\":\"A=abs(pitch_mekf_measurement_relative_deg_at_posterior_extremum);measurement_start_reference;no_delay_projection;no_output_scaling\",";
   json += "\"energy_control_autonomous_rate_coordinate\":\"(gy_dps-mekf_bias_y_dps)*mekf_gyro_y_scale;live_MEKF_bias;historical_Q1_rate_support_rescaled\",";
-  json += "\"energy_control_autonomous_model_coordinate_status\":\"P1_and_base_Q1_retained_for_MEKF_validation;legacy_gyro_fit_disabled;v46af_peak_fix_measured_70of70;v46ag_partial_rate_baseline_hardware_validation_pending\",";
-  json += "\"rate_baseline_revision\":\"v46ag_rate_baseline_25pct_20260919\",";
-  json += "\"rate_baseline_policy\":\"target8_delay3ms_after10s_supported_state_only;P1_plus_0p25_rate_baseline_difference_clipped_0p5deg;Q_gains_unchanged;all_other_conditions_P1\",";
+  json += "\"energy_control_autonomous_model_coordinate_status\":\"P1_retained_for_fallback_and_diagnostics;base_Q1_unchanged;legacy_gyro_fit_disabled;v46af_peak_fix_measured_70of70;v46ah_full_rate_hardware_validation_pending\",";
+  json += "\"rate_baseline_revision\":\"v46ah_rate_baseline_100pct_no_cap_20260919\",";
+  json += "\"rate_baseline_policy\":\"target8_delay3ms_after10s_supported_state_only;rate_baseline_direct_100pct_no_delta_cap;Q_gains_unchanged;all_other_conditions_P1\",";
+  json += "\"rate_baseline_blend\":1.0,\"rate_baseline_delta_cap_enabled\":false,\"rate_baseline_delta_cap_deg\":null,";
   json += "\"rate_baseline_formula\":\"A_rate_plus=7.217460941+0.286814471*(abs_rate-65);A_rate_minus=8.399746959+0.130807354*(abs_rate-65);A_next=A_baseline+g_side*Q\",";
   json += "\"rate_baseline_state_gate\":\"next_plus:previous_peak8p3to9p8_rate61p5to72;next_minus:previous_peak6p7to9_rate59to70;inclusive\",";
   json += "\"rate_baseline_reason_codes\":\"0=applied,1=first10s,2=other_target_or_delay,3=outside_state,4=nonfinite,255=not_evaluated\",";

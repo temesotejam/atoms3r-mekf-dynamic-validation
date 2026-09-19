@@ -2,11 +2,9 @@
 #include <cmath>
 #include <cstdint>
 
-// V46ag experimental baseline correction. Q gains stay fixed at the V46af
+// V46ah direct rate baseline in the measured state range. Q gains stay at V46af
 // values; this fit is predictive, not an independently identified Q response.
 namespace rate_baseline {
-constexpr float BLEND = 0.25f;
-constexpr float MAX_CORRECTION_DEG = 0.5f;
 constexpr uint32_t ENABLE_AFTER_MS = 10000;
 constexpr float PLUS_AT_65_DPS = 7.217460941f;
 constexpr float PLUS_PER_DPS = 0.286814471f;
@@ -42,9 +40,10 @@ inline Result evaluate(float p1_deg, float abs_rate_dps, int8_t side,
       : (previous_peak_deg >= 6.7f && previous_peak_deg <= 9.0f &&
          abs_rate_dps >= 59.0f && abs_rate_dps <= 70.0f);
   if (!supported) { r.reason=OUTSIDE_STATE; return r; }
-  r.correction_deg=std::fmax(-MAX_CORRECTION_DEG,
-      std::fmin(MAX_CORRECTION_DEG, BLEND*(r.rate_deg-p1_deg)));
-  r.adjusted_deg=std::fmax(0.0f,p1_deg+r.correction_deg);
+  // Use the rate model directly: no blend, no limit relative to the old P1.
+  // P1 and the full difference remain logged; all preceding gates are retained.
+  r.adjusted_deg=r.rate_deg;
+  r.correction_deg=r.adjusted_deg-p1_deg;
   r.reason=APPLIED;
   return r;
 }
