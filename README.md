@@ -1,14 +1,16 @@
 ## Current firmware: V46ai / 0.46.34 — rate-only next-peak prediction
 
-[Web flasher](https://temesotejam.github.io/atoms3r-mekf-dynamic-validation/) · [今回の変更・測定手順](docs/V46AI_RATE_ONLY_BASELINE.md) · [従来の範囲限定版](docs/V46AH_FULL_RATE_BASELINE.md)
+[Web flasher](https://temesotejam.github.io/atoms3r-mekf-dynamic-validation/) · [現在の角度推定の説明（日本語）](docs/ATTITUDE_ESTIMATION_V46AI_JA.md) · [今回の変更・測定手順](docs/V46AI_RATE_ONLY_BASELINE.md) · [従来の範囲限定版](docs/V46AH_FULL_RATE_BASELINE.md)
 
 次ピークの予測をZEROクロス時の角速度式に統一しました。
 最初の通常判断から全目標・全遅延設定で使い、P1とその切り替え条件を削除しています。
 直前ピークは予測式の入力にしません。低速時に式が負となる場合は振幅を0°とします。
 MEKF、ピーク追跡、3 ms先読み、Qゲイン、Ki、300 mA・最大100 msは維持しています。
 
-**次の測定：3 ms・8°・30秒。** 各Run終了後、次の開始前にRWLOGと動画を保存してください。
-全域で運転した実機性能は次の測定で確認します。RWLOG v51の配置を維持し、P1関連の旧ログ列はnullになります。
+**比較測定の条件：3 ms・8°・30秒。** 各Run終了後、次の開始前にRWLOGと動画を保存してください。
+V46aiの初回実機測定3943では動画と69ピークが対応しました。推定方法、角度の基準、
+検証結果の意味は[現在の角度推定の説明](docs/ATTITUDE_ESTIMATION_V46AI_JA.md)を参照してください。
+RWLOG v51の配置を維持し、P1関連の旧ログ列はnullになります。
 
 以下は過去の構成・検証の記録です。
 
@@ -122,4 +124,3 @@ This project documents build verification only; it does not instruct or perform 
 - Run 1 must pass all scheduled Q levels and LED-anchor video synchronization before the same firmware is frozen for Runs 2--4.
 
 The RWLOG remains binary format v43 because the sample layout is unchanged; it contains expanded JSON metadata `q_ident_events`. Use `tools/convert_rwlog_to_csv.py` to create `q_ident_events.csv`.
-
