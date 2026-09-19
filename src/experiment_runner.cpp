@@ -468,7 +468,7 @@ void ExperimentRunner::updateDisplayedAngles(const ImuReading& r) {
   // V46z comparison-zero end
   // V46ac delay compensation begin
   // Video comparison stays on the unpredicted posterior measurement-relative
-  // angle. Autonomous timing gets only a lightweight fixed 3 ms projection to
+  // angle. Autonomous timing gets a lightweight projection fixed for this run to
   // compensate decision + actuator-current latency.
   status_.pitch_mekf_detector_relative_deg =
       status_.pitch_mekf_measurement_relative_deg;
@@ -476,11 +476,12 @@ void ExperimentRunner::updateDisplayedAngles(const ImuReading& r) {
     const float mekf_pitch_rate_dps =
         (r.gy_dps - status_.mekf_bias_y_dps) * Config::MEKF_GYRO_Y_SCALE;
     const float compensation_s =
-        static_cast<float>(Config::ENERGY_CONTROL_AUTONOMOUS_TIMING_COMPENSATION_US) * 1.0e-6f;
+        static_cast<float>(autonomous_timing_.runUs()) * 1.0e-6f;
     status_.pitch_mekf_detector_relative_deg =
-        isfinite(status_.pitch_mekf_measurement_relative_deg) && isfinite(mekf_pitch_rate_dps)
+        autonomous_timing_.runUs() == 0 ? status_.pitch_mekf_measurement_relative_deg :
+        (isfinite(status_.pitch_mekf_measurement_relative_deg) && isfinite(mekf_pitch_rate_dps)
             ? status_.pitch_mekf_measurement_relative_deg + mekf_pitch_rate_dps * compensation_s
-            : NAN;
+            : NAN);
     status_.pitch_mekf_deg = status_.pitch_mekf_detector_relative_deg;
   }
   // V46ac delay compensation end
@@ -856,6 +857,18 @@ bool ExperimentRunner::setEnergyControlAutonomousTarget(float target_deg) {
   return true;
 }
 
+bool ExperimentRunner::setEnergyControlAutonomousTimingCompensation(uint32_t value_us) {
+  const bool stopped_and_available =
+      (status_.state == ExperimentState::READY_TO_MEASURE || status_.state == ExperimentState::FINISHED) &&
+      logger_ && !logger_->downloading();
+  if (!autonomous_timing_.select(value_us, stopped_and_available)) {
+    status_.last_error = "timing_compensation_not_selectable";
+    return false;
+  }
+  status_.last_error = "";
+  return true;
+}
+
 const char* ExperimentRunner::energyControlAutonomousPhaseName() const {
   switch (energy_control_autonomous_phase_) {
     case EnergyControlAutonomousPhase::STRONG_START_KICK: return "STRONG_START_KICK";
@@ -893,6 +906,7 @@ bool ExperimentRunner::startEnergyControlAutonomousCapture() {
   }
   g_v46_mekf_run_reinit = V46MekfRunReinitAccumulator{};
   g_v46_mekf_run_reinit.active = true;
+  autonomous_timing_.captureRun();
   energy_control_autonomous_mode_ = true;
   energy_control_autonomous_pulse_authorized_ = false;
   // V46 records only the adopted hold-073 dynamic-beta Madgwick alongside MEKF.
@@ -1117,7 +1131,8 @@ void ExperimentRunner::beginStartSync(uint32_t now_ms) {
                     static_cast<uint8_t>(q_run_mode_), centi(control_target_peak_deg_), q_probe_schedule_id_,
                     passive_capture_mode_, q1_shadow_run_target_peak_abs_deg_, q_ident_mode_,
                     q_ident_mode_ ? static_cast<uint8_t>(q_ident_run_schedule_id_ + 1) : 0,
-                     energy_control_v0_mode_, energy_control_autonomous_mode_);
+                     energy_control_v0_mode_, energy_control_autonomous_mode_,
+                     energy_control_autonomous_mode_ ? autonomous_timing_.runUs() : 0);
   last_log_us_ = 0;
   status_.state = ExperimentState::START_SYNC;
   status_.sync_event_id = 1;

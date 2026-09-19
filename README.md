@@ -1,3 +1,19 @@
+## Current firmware: V46ad / 0.46.29 — delay compensation sweep
+
+[Web flasher](https://temesotejam.github.io/atoms3r-mekf-dynamic-validation/) · [測定手順](docs/V46AD_DELAY_COMPENSATION_SWEEP.md)
+
+停止中の操作画面で遅延補償を **0 / 3 / 6 / 9 ms** から選択できます。起動時は3 msです。
+選択値はRun開始時に固定され、RWLOGの `autonomous_timing_compensation_us` に記録されます。
+次の設定を選んでも、保存済みRunのメタデータは変わりません。
+
+粗探索は目標8°、各30秒、**3 → 6 → 9 → 0 → 3 ms** の順です。
+各Runを保存してから次を開始してください。振幅計算、solver、電流、IMU取得、停止条件はV46acと同じです。
+ホスト回帰検証と実機向けビルドを公開ゲートにしています。実機での最適値は今回の測定で比較します。
+
+以下は過去の構成・検証の記録です。
+
+---
+
 # V46 MEKF + Dynamic-beta Madgwick synchronized validation build
 
 This working firmware is derived from the V45 current-audit / Autonomous Energy Control V7 build.

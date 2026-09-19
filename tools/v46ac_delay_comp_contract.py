@@ -1,5 +1,6 @@
 """Reverse V46ac autonomous light delay compensation for retained hashes."""
 import re
+from v46ad_timing_selection_contract import normalize_v46ad
 
 OLD_PREDICTION = """    const uint32_t sample_age_us = r.last_gyro_update_us == 0 ? 0 : static_cast<uint32_t>(micros() - r.last_gyro_update_us);
     const uint32_t horizon_us = min<uint32_t>(Config::MEKF_CONTROL_PREDICTION_MAX_US,
@@ -19,6 +20,7 @@ OLD_CONTROL = """  // V46ab no-control-prediction begin
   // V46ab no-control-prediction end"""
 
 def normalize_runner(text: str) -> str:
+    text = normalize_v46ad(text, "src/experiment_runner.cpp")
     text = re.sub(
         r"    // V46ac autonomous diagnostic prediction begin\n.*?\n    // V46ac autonomous diagnostic prediction end",
         OLD_PREDICTION,
@@ -37,6 +39,7 @@ def normalize_runner(text: str) -> str:
     )
 
 def normalize_config(text: str) -> str:
+    text = normalize_v46ad(text, "src/config.h")
     text = text.replace(
         "v46ac_light_delay_compensation_20260918",
         "v46ab_no_control_prediction_20260918",

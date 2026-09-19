@@ -19,6 +19,7 @@ private:
   void handleStartEnergyControlV0();
   void handleStartEnergyControlAutonomous();
   void handleSetEnergyControlAutonomousTarget();
+  void handleSetEnergyControlAutonomousTimingCompensation();
   void handleStartZeroCross();
   void handleStartIdentification();
   void handleStartControl();

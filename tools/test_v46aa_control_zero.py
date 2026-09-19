@@ -9,7 +9,7 @@ logger = (ROOT / "src/psram_logger.cpp").read_text(encoding="utf-8")
 config = (ROOT / "src/config.h").read_text(encoding="utf-8")
 converter = (ROOT / "tools/convert_rwlog_to_csv.py").read_text(encoding="utf-8")
 
-assert "v46ac_light_delay_compensation_20260918" in config
+assert "v46ad_delay_compensation_sweep_20260919" in config
 assert "IMU_POLL_PERIOD_US = 1000UL" in config
 assert "BMI270_GYRO_ODR_HZ = 400" in config
 assert "BMI270_ACCEL_ODR_HZ = 200" in config
