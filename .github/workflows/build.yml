@@ -18,7 +18,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Verify V46ah timing, current observation and retained controller envelope
+      - name: Verify V46ai timing, current observation and retained controller envelope
         run: |
           set -euxo pipefail
           python tools/test_v46u_timing.py
@@ -35,7 +35,7 @@ jobs:
           python tools/test_v46ac_delay_compensation.py
           python tools/test_v46ad_timing_selection.py
           python tools/test_v46ae_mekf_amplitude.py
-          python tools/test_v46ag_rate_baseline.py
+          python tools/test_v46ai_rate_only.py
       - name: Run retained native acquisition, startup, control and MEKF tests
         run: |
           set -euxo pipefail
@@ -50,7 +50,7 @@ jobs:
           python -m json.tool site/manifest.json >/dev/null
       - name: Install PlatformIO
         run: pip install platformio
-      - name: Build V46ah firmware with verified BMI270 transport patch
+      - name: Build V46ai firmware with verified BMI270 transport patch
         run: |
           set -euxo pipefail
           pio pkg install -e atoms3cam
@@ -66,12 +66,12 @@ jobs:
           cp bmi270-build-patch.json dist/
           python "$HOME/.platformio/packages/tool-esptoolpy/esptool.py" --chip esp32s3 merge_bin -o dist/merged-firmware.bin 0x0000 dist/bootloader.bin 0x8000 dist/partitions.bin 0xe000 dist/boot_app0.bin 0x10000 dist/firmware.bin
           printf '%s\n' "$GITHUB_SHA" > dist/build-sha.txt
-          printf '%s\n' 'V46ah 0.46.33; frozen 1ms BMI270 acquisition; posterior MEKF amplitude with expected-side peak rearm and live-bias-corrected rate; 3ms zero-cross compensation (selectable); legacy gyro-coordinate side fit disabled; 100pct direct rate baseline without delta cap after 10s at 8deg/3ms within state gate; heavy Autonomous quaternion prediction disabled; output envelope and ESTOP retained' > dist/FLASH_LAYOUT.txt
+          printf '%s\n' 'V46ai 0.46.34; frozen 1ms BMI270 acquisition; posterior MEKF amplitude with expected-side peak rearm and live-bias-corrected rate; 3ms zero-cross compensation (selectable); legacy gyro-coordinate side fit disabled; rate-only baseline from first accepted zero-cross for all settings; no previous-peak predictor or P1 fallback; negative formula floored at zero; heavy Autonomous quaternion prediction disabled; output envelope and ESTOP retained' > dist/FLASH_LAYOUT.txt
           (cd dist && sha256sum *.bin > SHA256SUMS.txt)
           git diff --exit-code
       - uses: actions/upload-artifact@v4
         with:
-          name: atoms3r-v46ah-${{ github.sha }}
+          name: atoms3r-v46ai-${{ github.sha }}
           path: dist/
           if-no-files-found: error
           retention-days: 30

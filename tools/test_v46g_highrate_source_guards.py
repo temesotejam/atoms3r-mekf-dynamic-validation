@@ -16,7 +16,7 @@ for token in (
     assert token in config, token
 assert (
     "v46l_fast_solver_shadow_20260914" in config or
-    "v46ah_full_rate_baseline_20260919" in config
+    "v46ai_rate_only_baseline_20260919" in config
 ), "supported V46l/V46s controller identity"
 for token in ("M5.Imu.getType() != m5::imu_bmi270", "getImuInstancePtr(0)", "sensor_mask_accel",
               "sensor_mask_gyro", "accel_sequence", "gyro_sequence"):

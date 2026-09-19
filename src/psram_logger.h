@@ -339,7 +339,7 @@ class PsramLogger {
     float free_next_peak_amplitude_deg = NAN;
     float p1_free_peak_before_rate_deg = NAN;
     float rate_baseline_peak_deg = NAN;
-    float rate_baseline_correction_deg = 0.0f;
+    float rate_baseline_correction_deg = NAN;  // retired P1-difference column
     uint8_t rate_baseline_reason = 255;
     float passive_energy_j = NAN;
     float target_peak_deg = NAN;

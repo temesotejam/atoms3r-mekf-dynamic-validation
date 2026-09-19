@@ -1,14 +1,14 @@
-## Current firmware: V46ah / 0.46.33 — direct rate baseline
+## Current firmware: V46ai / 0.46.34 — rate-only next-peak prediction
 
-[Web flasher](https://temesotejam.github.io/atoms3r-mekf-dynamic-validation/) · [今回の変更・測定手順](docs/V46AH_FULL_RATE_BASELINE.md) · [従来25%版](docs/V46AG_RATE_BASELINE.md)
+[Web flasher](https://temesotejam.github.io/atoms3r-mekf-dynamic-validation/) · [今回の変更・測定手順](docs/V46AI_RATE_ONLY_BASELINE.md) · [従来の範囲限定版](docs/V46AH_FULL_RATE_BASELINE.md)
 
-角速度による次ピーク予測を100%採用し、従来P1との差を±0.5°に制限する処理を外した実測版です。
-目標8°・遅延補償3 ms・開始10秒以降・既存の状態範囲内で適用し、それ以外はP1を使います。
+次ピークの予測をZEROクロス時の角速度式に統一しました。
+最初の通常判断から全目標・全遅延設定で使い、P1とその切り替え条件を削除しています。
+直前ピークは予測式の入力にしません。低速時に式が負となる場合は振幅を0°とします。
 MEKF、ピーク追跡、3 ms先読み、Qゲイン、Ki、300 mA・最大100 msは維持しています。
 
-**次の測定：3 ms・8°・30秒。** 開始姿勢と撮影条件をそろえ、各Run終了後、次の開始前にRWLOGと動画を保存してください。
-既存2 Runの記録状態・Qを固定した予測は改善しました。100%・補正上限なしで運転した実機性能は、これから確認します。
-RWLOG v51の時系列配置とイベント項目を維持し、metadataで100%・補正上限なしを識別します。
+**次の測定：3 ms・8°・30秒。** 各Run終了後、次の開始前にRWLOGと動画を保存してください。
+全域で運転した実機性能は次の測定で確認します。RWLOG v51の配置を維持し、P1関連の旧ログ列はnullになります。
 
 以下は過去の構成・検証の記録です。
 

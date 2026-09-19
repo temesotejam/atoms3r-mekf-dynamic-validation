@@ -120,7 +120,7 @@ static constexpr uint32_t MADGWICK_SETTLING_MS = 5000UL;
 // Dedicated manual-release capture. The first window is held static by the
 // operator; it is metadata, not a per-run angle-zero operation.
 static constexpr char PASSIVE_CAPTURE_FIRMWARE_REVISION[] = "energy_control_autonomous_v7_side_response_correction_20260904";
-static constexpr char ATTITUDE_VALIDATION_REVISION[] = "v46ah_full_rate_baseline_20260919";
+static constexpr char ATTITUDE_VALIDATION_REVISION[] = "v46ai_rate_only_baseline_20260919";
 static constexpr float MEKF_GYRO_Y_SCALE = 0.908911f;
 static constexpr uint32_t PASSIVE_CAPTURE_DURATION_MS = 60000UL;
 static constexpr uint32_t PASSIVE_STATIC_WINDOW_MS = 3000UL;
@@ -251,7 +251,7 @@ static constexpr uint8_t ENERGY_CONTROL_V0_INVALID_NONALTERNATING_SIDE = 11;
 static constexpr uint8_t ENERGY_CONTROL_V0_INVALID_EVENT_LOG_OVERFLOW = 12;
 
 // Autonomous Energy Control V7: one startup-only strong kick is followed by
-// direct normal P1/Q1 energy control on accepted physical half-cycles. The V5
+// direct rate-baseline/Q1 control on accepted physical half-cycles. The V5
 // event policy separates raw detector candidates from accepted physical events
 // so pulse transients cannot self-trigger the next control cycle.
 static constexpr char ENERGY_CONTROL_AUTONOMOUS_MEASUREMENT_MODE[] =
@@ -273,7 +273,7 @@ static constexpr uint16_t ENERGY_CONTROL_AUTONOMOUS_MAX_PULSE_MS = 100;
 
 // V46ae: retain the historical V7 fit for provenance, but do not apply a
 // gyro-integral-coordinate residual to the new MEKF posterior amplitude.
-// P1 physics, base Q1 gains and the per-side error integrators remain active.
+// Geometric potential, base Q1 gains and per-side error integrators remain active.
 static constexpr bool ENERGY_CONTROL_AUTONOMOUS_SIDE_RESPONSE_CORRECTION_ENABLED = false;
 static constexpr char ENERGY_CONTROL_AUTONOMOUS_SIDE_RESPONSE_CORRECTION_SOURCE[] =
     "V6_three_run_closed_loop_20260904";
@@ -295,13 +295,10 @@ static constexpr uint8_t ENERGY_CONTROL_AUTONOMOUS_PEAK_CONFIRM_SAMPLES = 3;
 // the measured 0.317--0.490 s passive half-cycle range.
 static constexpr uint32_t ENERGY_CONTROL_AUTONOMOUS_MIN_HALF_CYCLE_MS = 250UL;
 static constexpr uint32_t ENERGY_CONTROL_AUTONOMOUS_MIN_ZERO_TO_PEAK_MS = 125UL;
-// P1 free-decay model: F_s(A)=U_P1^-1(alpha*U_P1(A)-Ec), A>=0 deg.
-// It is amplitude-side-independent (F_+=F_-); side is used for signed peak
-// identity and the existing side-specific Q augmentation gain.
+// V46ai free-peak prediction: nonnegative side-specific zero-cross rate formula.
+// The geometric potential remains the angle/energy conversion for the solver.
 static constexpr char ENERGY_CONTROL_AUTONOMOUS_FREE_MODEL_REVISION[] =
-    "P1_STEP_energy_alpha_0p870671664_Ec_0_20260828";
-static constexpr float ENERGY_CONTROL_AUTONOMOUS_P1_FREE_DECAY_ALPHA = 0.8706716644111074f;
-static constexpr float ENERGY_CONTROL_AUTONOMOUS_P1_FREE_DECAY_EC_J = 0.0f;
+    "ZERO_CROSS_RATE_ONLY_NONNEGATIVE_20260919";
 static constexpr float ENERGY_CONTROL_AUTONOMOUS_INTEGRAL_KI_MAS_PER_DEG = 0.10f;
 static constexpr uint16_t ENERGY_CONTROL_AUTONOMOUS_MAX_EVENTS = 256;
 static constexpr uint8_t ENERGY_CONTROL_AUTONOMOUS_REASON_NONE = 0;

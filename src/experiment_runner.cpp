@@ -2280,27 +2280,7 @@ float ExperimentRunner::energyControlPotentialJ(float amplitude_deg) const {
       (height_m - Config::ENERGY_CONTROL_V0_CG_HEIGHT_M);
 }
 
-float ExperimentRunner::energyControlAutonomousFreeNextPeakAmplitude(float amplitude_deg) const {
-  const float current_energy = energyControlPotentialJ(amplitude_deg);
-  if (!isfinite(current_energy) || current_energy < 0.0f) return NAN;
-  const float next_energy = Config::ENERGY_CONTROL_AUTONOMOUS_P1_FREE_DECAY_ALPHA * current_energy -
-      Config::ENERGY_CONTROL_AUTONOMOUS_P1_FREE_DECAY_EC_J;
-  if (!isfinite(next_energy)) return NAN;
-  if (next_energy <= 0.0f) return 0.0f;
-  const float maximum_deg = asinf(Config::ENERGY_CONTROL_V0_OUTER_EDGE_X_M /
-                                  Config::ENERGY_CONTROL_V0_RADIUS_M) * 57.295779513082320876f;
-  const float maximum_energy = energyControlPotentialJ(maximum_deg);
-  if (!isfinite(maximum_energy) || next_energy > maximum_energy) return NAN;
-  float lo = 0.0f;
-  float hi = maximum_deg;
-  for (uint8_t i = 0; i < 32; ++i) {
-    const float mid = 0.5f * (lo + hi);
-    const float mid_energy = energyControlPotentialJ(mid);
-    if (!isfinite(mid_energy)) return NAN;
-    if (mid_energy < next_energy) lo = mid; else hi = mid;
-  }
-  return 0.5f * (lo + hi);
-}
+// V46ai: free-peak prediction is provided solely by rate_baseline::evaluate.
 float ExperimentRunner::energyControlAutonomousGainForSide(int8_t physical_side) const {
   return physical_side > 0 ? Config::Q1_SHADOW_GAIN_PHYSICAL_PLUS_DEG_PER_MAS :
       Config::Q1_SHADOW_GAIN_PHYSICAL_MINUS_DEG_PER_MAS;
@@ -2796,17 +2776,13 @@ void ExperimentRunner::updateEnergyControlAutonomousAtZeroCross(uint32_t t_test_
       event.q_command_direction == event.physical_next_peak_side;
   event.vbat_mV = status_.roller_battery_mV;
   const uint32_t v46l_free_model_t0_us = micros();
-  event.free_next_peak_amplitude_deg = energyControlAutonomousFreeNextPeakAmplitude(
-      energy_control_autonomous_last_peak_amplitude_deg_);
-  // V46ag: retain the raw P1 prediction and record the exact baseline used by
-  // the unchanged width selector. First 10 s and other settings keep V46af.
-  const auto baseline = rate_baseline::evaluate(event.free_next_peak_amplitude_deg,
-      event.zero_cross_abs_rate_dps, event.physical_next_peak_side,
-      event.previous_peak_amplitude_deg, event.target_peak_deg, t_test_ms,
-      autonomous_timing_.runUs());
-  event.p1_free_peak_before_rate_deg = baseline.p1_deg;
-  event.rate_baseline_peak_deg = baseline.rate_deg;
-  event.rate_baseline_correction_deg = baseline.correction_deg;
+  // V46ai: only the current interpolated crossing rate and its physical side
+  // determine the free peak. There is no previous-amplitude P1 calculation.
+  const auto baseline = rate_baseline::evaluate(
+      event.zero_cross_abs_rate_dps, event.physical_next_peak_side);
+  event.p1_free_peak_before_rate_deg = NAN;  // retired CSV column, never computed
+  event.rate_baseline_peak_deg = baseline.rate_deg;  // raw formula, before zero floor
+  event.rate_baseline_correction_deg = NAN;  // retired P1-difference column
   event.rate_baseline_reason = static_cast<uint8_t>(baseline.reason);
   event.free_next_peak_amplitude_deg = baseline.adjusted_deg;
   const uint32_t v46l_free_model_us = static_cast<uint32_t>(micros() - v46l_free_model_t0_us);
