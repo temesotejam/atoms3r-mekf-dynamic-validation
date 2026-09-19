@@ -5,8 +5,10 @@ Only the remainder, after these documented changes, equals the old baseline.
 """
 import json
 from pathlib import Path
+from v46af_peak_side_contract import normalize_v46af
 
 def normalize_v46ae(text: str, path: str) -> str:
+    text = normalize_v46af(text, path)
     deltas = json.loads(Path(__file__).with_name("v46ae_mekf_amplitude_delta.json").read_text())
     for delta in reversed(deltas):
         if delta["path"] != path:

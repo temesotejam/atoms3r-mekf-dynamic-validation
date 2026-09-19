@@ -2650,6 +2650,11 @@ void ExperimentRunner::updateEnergyControlAutonomousPeakTracker(uint32_t now_ms,
   const int8_t detector_side = peak_relative_angle_deg > 0.0f ? 1 :
       (peak_relative_angle_deg < 0.0f ? -1 : 0);
   if (detector_side == 0) return;
+  // V46af: a compensated zero-cross can precede the posterior zero-cross.
+  // With no output, tracking resumes immediately and may still see the old
+  // side. Wait for the commanded half-cycle before seeding its extremum.
+  if (energy_control_autonomous_pending_peak_ &&
+      detector_side != energy_control_autonomous_pending_next_side_) return;
   const float detector_abs_deg = fabsf(peak_relative_angle_deg);
   const uint32_t t_test_ms = now_ms - run_start_ms_;
   if (!energy_control_autonomous_peak_tracker_started_) {
