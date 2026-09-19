@@ -120,7 +120,7 @@ static constexpr uint32_t MADGWICK_SETTLING_MS = 5000UL;
 // Dedicated manual-release capture. The first window is held static by the
 // operator; it is metadata, not a per-run angle-zero operation.
 static constexpr char PASSIVE_CAPTURE_FIRMWARE_REVISION[] = "energy_control_autonomous_v7_side_response_correction_20260904";
-static constexpr char ATTITUDE_VALIDATION_REVISION[] = "v46ad_delay_compensation_sweep_20260919";
+static constexpr char ATTITUDE_VALIDATION_REVISION[] = "v46ae_mekf_amplitude_20260919";
 static constexpr float MEKF_GYRO_Y_SCALE = 0.908911f;
 static constexpr uint32_t PASSIVE_CAPTURE_DURATION_MS = 60000UL;
 static constexpr uint32_t PASSIVE_STATIC_WINDOW_MS = 3000UL;
@@ -271,9 +271,10 @@ static constexpr int16_t ENERGY_CONTROL_AUTONOMOUS_CURRENT_MA = 300;
 static constexpr uint16_t ENERGY_CONTROL_AUTONOMOUS_MIN_PULSE_MS = 0;
 static constexpr uint16_t ENERGY_CONTROL_AUTONOMOUS_MAX_PULSE_MS = 100;
 
-// V7: bounded side-response residual correction fitted in firmware peak coordinates
-// from three V6 target-8 closed-loop runs. It augments, never replaces, P1/Q1.
-static constexpr bool ENERGY_CONTROL_AUTONOMOUS_SIDE_RESPONSE_CORRECTION_ENABLED = true;
+// V46ae: retain the historical V7 fit for provenance, but do not apply a
+// gyro-integral-coordinate residual to the new MEKF posterior amplitude.
+// P1 physics, base Q1 gains and the per-side error integrators remain active.
+static constexpr bool ENERGY_CONTROL_AUTONOMOUS_SIDE_RESPONSE_CORRECTION_ENABLED = false;
 static constexpr char ENERGY_CONTROL_AUTONOMOUS_SIDE_RESPONSE_CORRECTION_SOURCE[] =
     "V6_three_run_closed_loop_20260904";
 static constexpr float ENERGY_CONTROL_AUTONOMOUS_SIDE_RESPONSE_BLEND_LAMBDA = 0.5f;
@@ -283,10 +284,8 @@ static constexpr float ENERGY_CONTROL_AUTONOMOUS_SIDE_RESPONSE_FIT_G_PLUS_DEG_PE
 static constexpr float ENERGY_CONTROL_AUTONOMOUS_SIDE_RESPONSE_FIT_C_MINUS_DEG = -1.239921640f;
 static constexpr float ENERGY_CONTROL_AUTONOMOUS_SIDE_RESPONSE_FIT_G_MINUS_DEG_PER_MAS = 0.6580326445f;
 
-// The start-referenced scaled +gy integral supplies the absolute energy peak
-// amplitude.  It is not used to detect central passage.
-static constexpr float ENERGY_CONTROL_AUTONOMOUS_GYRO_TO_VIDEO_PEAK_SCALE = 0.908911f;
-static constexpr uint32_t ENERGY_CONTROL_AUTONOMOUS_GYRO_INTEGRATION_MAX_DT_US = 25000UL;
+// V46ae amplitude is abs(posterior_MEKF - measurement_start_posterior).
+// MEKF_GYRO_Y_SCALE already calibrates the filter input; never scale its angle again.
 // A continuous adopted-angle extremum plus this many rate-confirming returning
 // samples defines one physical peak.  No rate or amplitude acceptance minimum
 // is introduced.

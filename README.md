@@ -1,14 +1,14 @@
-## Current firmware: V46ad / 0.46.29 — delay compensation sweep
+## Current firmware: V46ae / 0.46.30 — MEKF amplitude control
 
-[Web flasher](https://temesotejam.github.io/atoms3r-mekf-dynamic-validation/) · [測定手順](docs/V46AD_DELAY_COMPENSATION_SWEEP.md)
+[Web flasher](https://temesotejam.github.io/atoms3r-mekf-dynamic-validation/) · [変更内容・採用経緯・測定手順](docs/V46AE_MEKF_AMPLITUDE.md)
 
-停止中の操作画面で遅延補償を **0 / 3 / 6 / 9 ms** から選択できます。起動時は3 msです。
-選択値はRun開始時に固定され、RWLOGの `autonomous_timing_compensation_us` に記録されます。
-次の設定を選んでも、保存済みRunのメタデータは変わりません。
+Autonomousのピーク振幅・目標誤差・次パルス計算を、補償前のMEKF測定開始相対角へ統一しました。
+ゼロクロスはMEKF角＋3 msの先読み、角速度はMEKFの現在のバイアスで補正します。
+旧ジャイロ積分座標で調整した左右応答補正は無効化し、P1と基本Q1、正負別Kiは維持します。
 
-粗探索は目標8°、各30秒、**3 → 6 → 9 → 0 → 3 ms** の順です。
-各Runを保存してから次を開始してください。振幅計算、solver、電流、IMU取得、停止条件はV46acと同じです。
-ホスト回帰検証と実機向けビルドを公開ゲートにしています。実機での最適値は今回の測定で比較します。
+最初の測定は**遅延補償3 ms・目標8°・30秒**。各Run後、次の開始前にRWLOGと動画を保存してください。
+補償選択UIは残り、起動時は3 msです。RWLOG v51のmetadataに実使用値と新しい振幅・角速度の定義を保存します。
+実機の閉ループ性能は今回のデータ取得後に評価します。
 
 以下は過去の構成・検証の記録です。
 

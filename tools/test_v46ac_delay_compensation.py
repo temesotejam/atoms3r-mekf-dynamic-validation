@@ -6,7 +6,7 @@ runner = (ROOT / "src/experiment_runner.cpp").read_text(encoding="utf-8")
 config = (ROOT / "src/config.h").read_text(encoding="utf-8")
 logger = (ROOT / "src/psram_logger.cpp").read_text(encoding="utf-8")
 
-assert "v46ad_delay_compensation_sweep_20260919" in config
+assert "v46ae_mekf_amplitude_20260919" in config
 assert "ENERGY_CONTROL_AUTONOMOUS_TIMING_COMPENSATION_US = 3000UL" in config
 
 display = runner[
@@ -40,14 +40,15 @@ motion = runner[
     runner.index("void ExperimentRunner::updateEnergyControlAutonomousPeakTracker")
 ]
 assert "const float detector_relative_angle_deg = status_.pitch_mekf_detector_relative_deg;" in motion
-assert "energy_control_autonomous_gyro_relative_deg_" in motion
+assert "energy_control_autonomous_gyro_relative_deg_" not in motion
+assert "pitch_mekf_measurement_relative_deg" in motion
 for token in (
     "ENERGY_CONTROL_AUTONOMOUS_CURRENT_MA = 300",
     "ENERGY_CONTROL_AUTONOMOUS_MAX_PULSE_MS = 100",
 ):
     assert token in config, token
 
-assert "RWLOG_FORMAT_VERSION = 50" in logger
+assert "RWLOG_FORMAT_VERSION = 51" in logger
 assert "lightweight_scalar_delay_compensation" in logger
 assert "autonomous_timing_compensation_us" in logger
 print("V46ac lightweight delay compensation guards PASS")

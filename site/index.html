@@ -4,79 +4,24 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#111827">
-  <title>AtomS3R V46ad Fast Solver Motor Validation</title>
+  <title>AtomS3R V46ae Fast Solver Motor Validation</title>
   <link rel="stylesheet" href="styles.css">
   <script type="module" src="https://unpkg.com/esp-web-tools@10.1.1/dist/web/install-button.js?module"></script>
 </head>
 <body>
   <main class="shell">
     <header class="hero">
-      <p class="eyebrow">ATOMS3R / V46ad / MOTOR-DRIVEN VALIDATION</p>
+      <p class="eyebrow">ATOMS3R / V46ae / MOTOR-DRIVEN VALIDATION</p>
       <h1>MEKF Motor Validation<br><span>Web Flasher</span></h1>
-      <p class="lead">Autonomous Energy Control V7 を実際にモータ駆動しながら、MEKF と dynamic-beta Madgwick を同時記録する V46ad ファームウェアです。AtomS3R内蔵BMI270をGyro 400 Hz / Accel 200 Hzで使用し、MEKFは新しいGyroごとにpredict、新しいAccelが来たときだけ補正します。Autonomousのピーク・ゼロクロス検出は動画比較用posterior MEKF角を基礎にし、処理と電流立ち上がりの遅延を補う予測時間を、停止中に0・3・6・9 msから選べます（初期値3 ms）。従来のQuaternion未来予測はAutonomous中は実行しません。ゼロクロス直後のパルス幅選択にはV46Lで実機比較した高速solverを使用します。</p>
-      <div class="badges"><span>ESP32-S3</span><span>BMI270 400/200 Hz</span><span>RWLOG v50</span><span>V46ad Fast Solver</span><span>0 / 3 / 6 / 9 ms compensation</span></div>
+      <p class="lead">ピーク振幅と次のパルス計算をMEKFへ統一した測定版です。開始姿勢を0°とした角度を使い、ゼロクロスには3 msの遅延補償を適用します。</p>
+      <div class="badges"><span>ESP32-S3</span><span>BMI270 400/200 Hz</span><span>RWLOG v51</span><span>MEKF amplitude</span><span>3 ms compensation</span></div>
     </header>
-
     <section class="panel important">
-      <h2>V46ad / 0.46.29：遅延補償時間の粗探索</h2>
-      <p>1回の書き込みで、機体の操作画面から<strong>0・3・6・9 ms</strong>を切り替えられます。初期値は3 msです。停止中に選択し、30秒のRun中は固定されます。再起動すると3 msに戻ります。</p>
-      <p><strong>測定順：3 → 6 → 9 → 0 → 3 ms。</strong>目標は8°にそろえ、各Runの開始姿勢・撮影条件をそろえてください。各Run終了後、<strong>次の開始前にRWLOGと動画を保存</strong>してください。次のRunを始めると機体内の前回ログは上書きされます。</p>
-      <p>動画との比較には未補償の <code>pitch_mekf_measurement_relative_deg</code> を使います。タイミング判定用の角度は
-      <code>theta_control = theta_posterior + omega_mekf × 選択した補償時間</code> です。0 msでは未補償角をそのまま使います。</p>
-      <p>RWLOG v50の <code>autonomous_timing_compensation_us</code> に、そのRunで実際に使った値（0 / 3000 / 6000 / 9000）を保存します。測定後に次の値を選んでも、前回ログの値は変わりません。</p>
-      <p>Fast solver、振幅とエネルギーの計算、300 mA、最大100 ms、ESTOP条件、IMU取得設定は前版を維持しています。V46adの実機測定はこれからです。
-      <a href="https://github.com/temesotejam/atoms3r-mekf-dynamic-validation/blob/main/docs/V46AD_DELAY_COMPENSATION_SWEEP.md">測定手順と判定方針</a></p>
-    </section>
-    <section class="panel important">
-      <h2>V46ad / 0.46.29：電流記録の時刻整合を修正</h2>
-      <p>電流値・連番・取得時刻を1回のスナップショットから読み、その後に行の参照時刻を採ります。
-      別スナップショットの再読出しによる年齢の不整合を除去しました。未取得は従来どおりUINT32_MAXです。
-      V46p/V46q/V46sで再現した記録上の問題への修正で、制御判断・MEKF・10 ms停止条件は変更していません。</p>
-      <p>角度の積分座標のずれとIMUの取得間隔の揺らぎは別課題です。この版で修正済みとは扱いません。
-      V46adの実機確認は未実施です。<a href="https://github.com/temesotejam/atoms3r-mekf-dynamic-validation/blob/main/docs/V46T_CURRENT_OBSERVATION_FIX.md">4 Run比較と修正範囲</a></p>
-      <p>高速ソルバの判断・出力制限・IMU停止条件はV46rと同じです。追加したのは記録です。
-      処理時間、評価回数、入力サンプルの年齢、無入力・計算失敗を含む結果を
-      <code>v46s_solver_audit</code> に保存します。旧ソルバは実機上で実行しません。</p>
-      <p>再計算用の入力はfloat32のビット列で保存します。最後の128件を保持し、上書き件数を明示します。
-      Run終了またはESTOP後のRWLOGを保存してください。新しい実機での遅延改善量は未確認です。</p>
-      <p>解析方法：<a href="https://github.com/temesotejam/atoms3r-mekf-dynamic-validation/blob/main/docs/V46S_SOLVER_AUDIT.md">V46s検証手順</a></p>
-    </section>
-
-    <section class="panel important">
-      <h2>V46q由来：IMU取得タスクを軽量化し、残る遅延を分解</h2>
-      <p>30秒完走したV46pを基準に、加速度ノルム・加速度角の計算を高優先度の取得側から移動しました。
-      同じ式を制御側で新しい加速度ごとに計算します。IMU取得、MEKF、起動・停止条件はV46qの構成を継承します。</p>
-      <p>通知後の待ち、M5Unified読出し、単位変換、取得値の整理、キュー投入、周期超過時の待機を別々に記録します。
-      1 ms周期と取得6／制御4／HTTP2の優先度は変えていません。</p>
-      <p>RWLOGの<code>v46n_imu_acquisition.v46q_poll_profile</code>に自動保存します。
-      30秒全体の集計と100 msごとの最大ギャップ例が残ります。例は全ギャップの一覧ではありません。</p>
-      <p>V46sでは、この取得系を維持したまま高速solverを実制御へ採用しました。実機での最終的な遅延改善量は、同じ8°のモータ駆動Runで確認してください。
-      ビルド成功は実機の無遅延・無欠落を保証するものではありません。</p>
-    </section>
-
-    <section class="panel important">
-      <h2>V46ad / 0.46.29：高速ソルバ実制御 + V46q取得系</h2>
-      <p>取得版：<code>v46q_lightweight_acquisition_20260914</code>。従来のV7モータ制御、
-      ±300 mA・最大100 ms、立位判定、非常停止、2 ms電流監査は維持しています。</p>
-      <p>開始応答後に取得連番の境界を1回だけ作り、待機中の古いキューを新しいRunへ持ち込みません。
-      Run中の10 ms超の受け渡し遅延・キューあふれによる停止は維持しています。
-      ゼロクロス直後の0～100 ms全探索×2は、V46L実機比較で一致確認した高速探索へ置換しました。300 mA・最大100 ms・非常停止条件は変更していません。
-      IMUの二重初期化を廃止し、電源投入時は状態レジスタと実サンプルを確認して最大5回再試行します。
-      起動・立位の理由と、最初の停止時刻・遅延・キュー滞留数を診断に保存します。</p>
-      <div class="grid">
-        <article><strong>IMU取得</strong><p>Core 1 / 優先度6<br>1.0 ms周期の通知で取得し、通知がなければ待機。</p></article>
-        <article><strong>MEKF・制御／Web分離（V46pから維持）</strong><p>Core 1 / 測定中は優先度4<br>HTTPは別タスク優先度2。取得タスクが制御計算へ割り込めます。</p></article>
-        <article><strong>モータ・電流監査</strong><p>Core 0 / 優先度4<br>既存Rollerタスクを維持。IMUとは別のI²Cコントローラ。</p></article>
-        <article><strong>CPU独占を防止</strong><p>取得処理が1.0 ms以上かかった場合は既存のoverrun yieldで制御・停止処理へCPUを渡します。</p></article>
-      </div>
-      <p>32件の時刻付きキューからMEKF・高速solverへ順番に渡します。
-      キューあふれ、受け渡し遅れ10 ms超、取得停止は異常として停止します。
-      今回の実装では1 RTOS tick＝1 msをビルド時にも確認します。</p>
-      <p>RWLOGの<code>v46n_imu_acquisition</code>には全取得サンプルの周期集計と
-      受け渡し遅れを別々に保存します。通常RWLOG行は全IMUサンプルではありません。
-      時刻はM5Unifiedのホスト取得時刻であり、BMI270内部のサンプル欠落数を直接数えるものではありません。</p>
-      <p>姿勢推定・制御モデル・ピーク振幅の定義はV46lを継承しています。変更したのはパルス幅の探索方法で、V46Lの実機shadow比較で従来選択と一致した高速探索を実制御側へ昇格しました。
-      モータ駆動中の改善量は実機Runで確認してください。</p>
+      <h2>V46ae / 0.46.30：振幅制御をMEKFへ統一</h2>
+      <p>振幅には補償前のMEKF角度を使います。以前のジャイロ積分角に合わせた左右補正は外し、角速度にもMEKFのバイアス補正を反映しました。</p>
+      <p><strong>最初の測定：遅延補償3 ms・目標8°・30秒。</strong>開始姿勢と撮影条件をそろえてください。起動時の補償は3 msです。各Run終了後、<strong>次の開始前にRWLOGと動画を保存</strong>してください。</p>
+      <p>300 mA・最大100 ms、起動パルス、非常停止、IMU取得、LED同期は維持しています。新版の振幅制御結果は実機測定で確認します。</p>
+      <p><a href="https://github.com/temesotejam/atoms3r-mekf-dynamic-validation/blob/main/docs/V46AE_MEKF_AMPLITUDE.md">変更内容・これまでの採用経緯・測定手順</a></p>
       <p>公開ビルド：<code id="build-sha">取得中</code><br><a href="build-sha.txt">ビルドSHAを確認</a> / <a href="firmware/SHA256SUMS.txt">ファームウェアのSHA-256</a></p>
     </section>
 
@@ -84,7 +29,7 @@
       <h2>このページから直接書き込めます</h2>
       <p>AtomS3R を USB でPCへ接続し、Chrome または Edge のデスクトップ版で下のボタンを押してください。</p>
       <esp-web-install-button manifest="manifest.json">
-        <button slot="activate" class="primary">AtomS3RへV46adを書き込む</button>
+        <button slot="activate" class="primary">AtomS3RへV46aeを書き込む</button>
         <span slot="unsupported" class="warning">このブラウザはWeb Serial / WebUSBに対応していません。PC版ChromeまたはEdgeを使用してください。</span>
       </esp-web-install-button>
       <details>
@@ -132,11 +77,11 @@
 
     <section class="panel safety">
       <h2>実機動作について</h2>
-      <p>このV46adはモータを実際に駆動します。可動部から手・ケーブル・治具を離し、異常時は実験画面の <strong>Emergency stop</strong> を使用してください。</p>
-      <p>Attitude revision: <code>v46ad_delay_compensation_sweep_20260919</code></p>
+      <p>このV46aeはモータを実際に駆動します。可動部から手・ケーブル・治具を離し、異常時は実験画面の <strong>Emergency stop</strong> を使用してください。</p>
+      <p>Attitude revision: <code>v46ae_mekf_amplitude_20260919</code></p>
     </section>
 
-    <footer>atoms3r-mekf-dynamic-validation / V46ad</footer>
+    <footer>atoms3r-mekf-dynamic-validation / V46ae</footer>
   </main>
   <script>
     fetch('build-sha.txt', {cache: 'no-store'})
