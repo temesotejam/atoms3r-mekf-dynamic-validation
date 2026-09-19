@@ -123,20 +123,20 @@
     <section class="panel">
       <h2>posterior と制御予測</h2>
       <div class="grid">
-        <article><strong>Posterior</strong><p><code>pitch_mekf_abs_deg</code><br>動画との姿勢推定精度比較用。</p></article>
-        <article><strong>Predicted</strong><p><code>pitch_mekf_predicted_abs_deg</code><br>posteriorのコピーだけを未来へ伝播。</p></article>
-        <article><strong>Control</strong><p><code>pitch_mekf_control_deg</code><br>predictedから開始時オフセットを引いた制御座標。</p></article>
-        <article><strong>Horizon</strong><p><code>sample age + 2.5 ms</code><br>最大10 ms。</p></article>
+        <article><strong>Posterior</strong><p><code>pitch_mekf_measurement_relative_deg</code><br>測定開始時を0°とする未補償角。動画との比較に使用。</p></article>
+        <article><strong>旧Quaternion予測</strong><p><code>pitch_mekf_predicted_abs_deg</code><br>Autonomous中は計算せず、診断値はNaN。</p></article>
+        <article><strong>Control</strong><p><code>pitch_mekf_control_deg</code><br>未補償角に角速度×補償時間を加えた、タイミング判定用の角度。</p></article>
+        <article><strong>補償時間</strong><p><code>0 / 3 / 6 / 9 ms</code><br>停止中に選択し、Run中は固定。初期値3 ms。</p></article>
       </div>
     </section>
 
     <section class="panel safety">
       <h2>実機動作について</h2>
-      <p>このV46sはモータを実際に駆動します。可動部から手・ケーブル・治具を離し、異常時は実験画面の <strong>Emergency stop</strong> を使用してください。</p>
-      <p>Attitude revision: <code>v46s_solver_audit_20260915</code></p>
+      <p>このV46adはモータを実際に駆動します。可動部から手・ケーブル・治具を離し、異常時は実験画面の <strong>Emergency stop</strong> を使用してください。</p>
+      <p>Attitude revision: <code>v46ad_delay_compensation_sweep_20260919</code></p>
     </section>
 
-    <footer>atoms3r-mekf-dynamic-validation / V46s</footer>
+    <footer>atoms3r-mekf-dynamic-validation / V46ad</footer>
   </main>
   <script>
     fetch('build-sha.txt', {cache: 'no-store'})
