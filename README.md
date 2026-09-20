@@ -1,3 +1,14 @@
+# Frozen development snapshot — 2026-09-20
+
+**This repository is kept as the completed snapshot of the V46aj / 0.46.35 attitude-estimation and fixed-3-ms validation stage.**
+New control or prediction work will not be developed in this repository; the next stage will use a separate repository.
+
+- [最終スナップショット・確定事項・未確定事項（日本語）](docs/FINAL_SNAPSHOT_20260920_JA.md)
+- Firmware implementation checkpoint: `1e9fb1bfdd8261bedc6657158c27142921848939`
+- The measurement procedures below are retained for reproduction/history, not as a statement that further work will continue here.
+
+---
+
 ## Current firmware: V46aj / 0.46.35 — fixed 3 ms delay compensation
 
 [Web flasher](https://temesotejam.github.io/atoms3r-mekf-dynamic-validation/) · [現在の角度推定の説明（日本語）](docs/ATTITUDE_ESTIMATION_V46AI_JA.md) · [今回の変更・測定手順](docs/V46AJ_FIXED_3MS.md) · [角速度による次ピーク予測](docs/V46AI_RATE_ONLY_BASELINE.md)
