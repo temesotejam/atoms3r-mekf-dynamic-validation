@@ -6,7 +6,6 @@
 #include "beta_phase_controller.h"
 #include "beta_turn_fast_controller.h"
 #include "config.h"
-#include "autonomous_timing_compensation.h"
 #include "imu_manager.h"
 #include "log_types.h"
 #include "mekf6.hpp"
@@ -153,9 +152,6 @@ public:
   bool startEnergyControlV0Capture();
   bool startEnergyControlAutonomousCapture();
   bool setEnergyControlAutonomousTarget(float target_deg);
-  bool setEnergyControlAutonomousTimingCompensation(uint32_t value_us);
-  uint32_t energyControlAutonomousTimingCompensationUs() const { return autonomous_timing_.selectedUs(); }
-  uint32_t energyControlAutonomousRunTimingCompensationUs() const { return autonomous_timing_.runUs(); }
   void zeroAngleNow();
   bool zeroCurrentRollDisplay();
   bool setCurrentRollTarget(float target_deg);
@@ -502,7 +498,6 @@ private:
   EnergyControlAutonomousHalfCycleState energy_control_autonomous_half_cycle_state_ =
       EnergyControlAutonomousHalfCycleState::WAIT_PEAK;
   float energy_control_autonomous_target_peak_deg_ = Config::ENERGY_CONTROL_AUTONOMOUS_DEFAULT_TARGET_PEAK_DEG;
-  autonomous_timing::Selection autonomous_timing_{Config::ENERGY_CONTROL_AUTONOMOUS_TIMING_COMPENSATION_US};
   float energy_control_autonomous_integral_plus_mA_s_ = 0.0f;
   float energy_control_autonomous_integral_minus_mA_s_ = 0.0f;
   // V46ae: one MEKF state supplies peak amplitude and zero-cross timing.

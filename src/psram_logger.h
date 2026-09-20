@@ -472,8 +472,7 @@ class PsramLogger {
                 uint8_t q_probe_schedule_id = 0, bool passive_capture = false,
                  float q1_shadow_target_peak_abs_deg = NAN, bool q_ident_mode = false,
                  uint8_t q_ident_run_schedule_id = 0, bool energy_control_v0_mode = false,
-                 bool energy_control_autonomous_mode = false,
-                 uint32_t autonomous_timing_compensation_us = 0);
+                 bool energy_control_autonomous_mode = false);
   uint16_t beginIdentificationEvent(const IdentificationEvent& event);
   void finishIdentificationEvent(uint16_t event_id, uint32_t peak_ms, int16_t theta_peak_cdeg);
   void addCalibrationPeakEvent(const CalibrationPeakEvent& event);
