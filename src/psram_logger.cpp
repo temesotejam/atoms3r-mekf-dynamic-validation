@@ -182,8 +182,7 @@ void PsramLogger::startRun(uint16_t run_id, uint64_t run_start_us, int16_t curre
                              uint8_t q_probe_schedule_id, bool passive_capture,
                              float q1_shadow_target_peak_abs_deg, bool q_ident_mode,
                              uint8_t q_ident_run_schedule_id, bool energy_control_v0_mode,
-                             bool energy_control_autonomous_mode,
-                             uint32_t autonomous_timing_compensation_us) {
+                             bool energy_control_autonomous_mode) {
   if (downloading_) return;
   sample_count_ = 0;
   current_run_id_ = run_id;
@@ -201,7 +200,8 @@ void PsramLogger::startRun(uint16_t run_id, uint64_t run_start_us, int16_t curre
   q_ident_run_schedule_id_ = q_ident_run_schedule_id;
   energy_control_v0_mode_ = energy_control_v0_mode;
   energy_control_autonomous_mode_ = energy_control_autonomous_mode;
-  autonomous_timing_compensation_us_ = energy_control_autonomous_mode ? autonomous_timing_compensation_us : 0;
+  autonomous_timing_compensation_us_ = energy_control_autonomous_mode
+      ? Config::ENERGY_CONTROL_AUTONOMOUS_TIMING_COMPENSATION_US : 0;
   identification_event_count_ = 0;
   calibration_peak_event_count_ = 0;
   calibration_probe_event_count_ = 0;
@@ -543,6 +543,7 @@ String PsramLogger::buildMetadataJson() const {
   json += "\"mekf_detector_zero_role\":\"measurement_start_posterior_reference_shared_by_amplitude_and_timing;delay_projection_only_for_zero_cross;never_resets_MEKF_state\",";
   json += "\"autonomous_control_prediction_enabled\":" + String(energy_control_autonomous_mode_ && autonomous_timing_compensation_us_ > 0 ? "true" : "false") + ",";
   json += "\"autonomous_control_prediction_type\":\"lightweight_scalar_delay_compensation\",";
+  json += "\"autonomous_timing_compensation_selectable\":false,";
   json += "\"autonomous_timing_compensation_us\":" + String(autonomous_timing_compensation_us_) + ",";
   json += "\"autonomous_timing_prediction_formula\":\"theta_control=theta_posterior_measurement_relative+(gy_dps-mekf_bias_y_dps)*mekf_gyro_y_scale*(autonomous_timing_compensation_us*1e-6)\",";
   json += "\"mekf_prediction_role\":\"legacy_quaternion_forward_prediction_disabled_during_autonomous;retained_only_for_non_autonomous_legacy_modes\",";

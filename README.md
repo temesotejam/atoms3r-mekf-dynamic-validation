@@ -1,16 +1,18 @@
-## Current firmware: V46ai / 0.46.34 — rate-only next-peak prediction
+## Current firmware: V46aj / 0.46.35 — fixed 3 ms delay compensation
 
-[Web flasher](https://temesotejam.github.io/atoms3r-mekf-dynamic-validation/) · [現在の角度推定の説明（日本語）](docs/ATTITUDE_ESTIMATION_V46AI_JA.md) · [今回の変更・測定手順](docs/V46AI_RATE_ONLY_BASELINE.md) · [従来の範囲限定版](docs/V46AH_FULL_RATE_BASELINE.md)
+[Web flasher](https://temesotejam.github.io/atoms3r-mekf-dynamic-validation/) · [現在の角度推定の説明（日本語）](docs/ATTITUDE_ESTIMATION_V46AI_JA.md) · [今回の変更・測定手順](docs/V46AJ_FIXED_3MS.md) · [角速度による次ピーク予測](docs/V46AI_RATE_ONLY_BASELINE.md)
 
-次ピークの予測をZEROクロス時の角速度式に統一しました。
-最初の通常判断から全目標・全遅延設定で使い、P1とその切り替え条件を削除しています。
+**Autonomousの遅延補償を3 ms固定にしました。** 0・6・9 msへの切り替え、選択画面、設定APIを削除しました。
+ZEROクロスの判定には、MEKF角度をバイアス補正済み角速度で3 ms先へ進めた角度を使います。
+次ピークの予測は、最初の通常判断から角速度式に統一しています。
 直前ピークは予測式の入力にしません。低速時に式が負となる場合は振幅を0°とします。
-MEKF、ピーク追跡、3 ms先読み、Qゲイン、Ki、300 mA・最大100 msは維持しています。
+MEKF、ピーク追跡、Qゲイン、Ki、300 mA・最大100 msは従来どおりです。
 
-**比較測定の条件：3 ms・8°・30秒。** 各Run終了後、次の開始前にRWLOGと動画を保存してください。
+**比較測定の条件：3 ms固定・8°・30秒。** 遅延補償の設定操作は不要です。
+各Run終了後、次の開始前にRWLOGと動画を保存してください。
 V46aiの初回実機測定3943では動画と69ピークが対応しました。推定方法、角度の基準、
 検証結果の意味は[現在の角度推定の説明](docs/ATTITUDE_ESTIMATION_V46AI_JA.md)を参照してください。
-RWLOG v51の配置を維持し、P1関連の旧ログ列はnullになります。
+RWLOG v51の配置を維持し、Autonomousのメタデータには固定値3000 µsを記録します。
 
 以下は過去の構成・検証の記録です。
 

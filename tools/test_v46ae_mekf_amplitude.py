@@ -54,7 +54,6 @@ source = r'''
 #include <iostream>
 #include <vector>
 #include "config.h"
-#include "autonomous_timing_compensation.h"
 #include "rate_baseline_correction.h"
 using std::isfinite;
 struct ImuReading { float gy_dps=0; uint32_t last_gyro_update_us=0; };
@@ -96,7 +95,8 @@ struct Fixture {
 int main(){
   // The real tracker must use the posterior extremum, even if a delayed
   // projection has a larger extremum earlier in the cycle.
-  for(float delay:{0.f,3.f,6.f,9.f})for(int side:{-1,1}) {
+  for(int side:{-1,1}) {
+    constexpr float delay=Config::ENERGY_CONTROL_AUTONOMOUS_TIMING_COMPENSATION_US/1000.f;
     Fixture f;
     f.sample(side*7.0f,side*100.f,delay);
     f.sample(side*8.0f,side*1.f,delay);
@@ -116,7 +116,8 @@ int main(){
   // V46ai: after a zero-width decision, the projected angle has crossed but
   // the posterior can remain on the previous side for several samples.
   // It must never seed the next extremum on that previous side.
-  for(float delay:{0.f,3.f,6.f,9.f})for(int side:{-1,1}) {
+  for(int side:{-1,1}) {
+    constexpr float delay=Config::ENERGY_CONTROL_AUTONOMOUS_TIMING_COMPENSATION_US/1000.f;
     Fixture f;f.clock=1000000;
     f.r.energy_control_autonomous_phase_=Phase::ENERGY_CONTROL;
     f.r.energy_control_autonomous_last_accepted_zero_cross_valid_=true;
@@ -176,7 +177,7 @@ int main(){
     float free=rate_baseline::evaluate(rate,side).adjusted_deg;assert(free>=0);
     close(f.r.energyControlAutonomousCorrectedPrediction(free,side,q,&residual),free+g*q);close(residual,0);
   }}
-  std::cout<<"V46ai native MEKF peak/rate/error-feedback: both sides, 4 delays, bias/time independence, duplicate samples, pulse suppression, zero-output expected-side rearm, nonfinite ESTOP, base-model path PASS\n";
+  std::cout<<"V46ai native MEKF peak/rate/error-feedback: both sides, fixed 3 ms, bias/time independence, duplicate samples, pulse suppression, zero-output expected-side rearm, nonfinite ESTOP, base-model path PASS\n";
 }
 '''
 for key,value in {'EVENT':event,'ENUMS':enums,'FIELDS':fields,'METHODS':methods}.items():
